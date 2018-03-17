@@ -60,3 +60,9 @@ configure_file(monsoon_cache-config-version.cmake.in ${CMAKE_CURRENT_BINARY_DIR}
 install(FILES monsoon_cache-config.cmake ${CMAKE_CURRENT_BINARY_DIR}/monsoon_cache-config-version.cmake DESTINATION "lib/cmake/monsoon-cache")
 
 add_subdirectory(test)
+
+find_package(Doxygen REQUIRED mscgen OPTIONAL_COMPONENTS dot)
+
+if(DOXYGEN_FOUND)
+  doxygen_add_docs(monsoon_cache-doc include)
+endif()
