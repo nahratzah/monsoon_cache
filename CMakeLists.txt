@@ -54,10 +54,10 @@ target_include_directories(monsoon_cache INTERFACE
 
 install(FILES ${headers} DESTINATION "include/monsoon/cache")
 install(TARGETS monsoon_cache EXPORT monsoon_cache DESTINATION "lib")
-install(EXPORT monsoon_cache DESTINATION "lib/cmake/monsoon-cache")
+install(EXPORT monsoon_cache DESTINATION "lib/cmake/monsoon_cache")
 
 configure_file(monsoon_cache-config-version.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/monsoon_cache-config-version.cmake @ONLY)
-install(FILES monsoon_cache-config.cmake ${CMAKE_CURRENT_BINARY_DIR}/monsoon_cache-config-version.cmake DESTINATION "lib/cmake/monsoon-cache")
+install(FILES monsoon_cache-config.cmake ${CMAKE_CURRENT_BINARY_DIR}/monsoon_cache-config-version.cmake DESTINATION "lib/cmake/monsoon_cache")
 
 add_subdirectory(test)
 
