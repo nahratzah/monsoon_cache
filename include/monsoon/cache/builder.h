@@ -10,12 +10,34 @@
 #include <memory>
 #include <optional>
 #include <stdexcept>
+#include <string>
+#if __has_include(<instrumentation/group.h>)
+# include <instrumentation/group.h>
+#endif
 
 namespace monsoon::cache {
 
 
 template<typename T, typename U, typename Hash, typename Eq, typename Alloc, typename Create>
 class extended_cache;
+
+#if __has_include(<instrumentation/group.h>)
+using group = instrumentation::group;
+#else
+struct group {};
+#endif
+
+struct stats_vars {
+  stats_vars(std::string name, group& parent, bool tls = false)
+  : name(std::move(name)),
+    parent(parent),
+    tls(tls)
+  {}
+
+  std::string name;
+  group& parent;
+  bool tls = false;
+};
 
 
 ///\brief Type agnostic data in \ref cache_builder "cache builder".
@@ -145,6 +167,14 @@ class cache_builder_vars {
    * property will be ignored.
    */
   constexpr auto async() const noexcept -> bool;
+  /**
+   * \brief Collect statistics.
+   * \details
+   * If enabled, statistics will be gathered.
+   *
+   * \note Statistics depends on the instrumentation library.
+   */
+  constexpr auto stats() const noexcept -> const std::optional<stats_vars>&;
 
  protected:
   std::optional<std::uintptr_t> max_memory_, max_size_;
@@ -153,6 +183,7 @@ class cache_builder_vars {
   unsigned int concurrency_ = 0; // zero signifies to use std::hardware_concurrency
   float lf_ = 1.0;
   bool async_ = false;
+  std::optional<stats_vars> stats_;
 };
 
 /**
@@ -263,6 +294,17 @@ class cache_builder
   ///\brief Enable or disable asynchronous resolution.
   ///\sa \ref cache_builder_vars::async
   constexpr auto async(bool async) noexcept -> cache_builder&;
+
+  using cache_builder_vars::stats;
+  ///\brief Enable instrumentation.
+  ///\sa \ref cache_builder_vars::stats
+  ///\param[in] name A cache name, for identification of the statistics.
+  ///\param[in] parent A parent group, under which to publish the statistics.
+  ///\param[in] tls If set, the thread ID will be included in statistics.
+  auto stats(std::string name, group& parent, bool tls = false) noexcept -> cache_builder&;
+  ///\brief Disable instrumentation.
+  ///\sa \ref cache_builder_vars::stats
+  auto no_stats() noexcept -> cache_builder&;
 
   /**
    * \brief Use the specified hash function for the cache.
@@ -517,6 +559,22 @@ noexcept
 }
 
 template<typename T, typename U, typename Hash, typename Eq, typename Alloc>
+auto cache_builder<T, U, Hash, Eq, Alloc>::stats(std::string name, group& parent, bool tls)
+noexcept
+-> cache_builder& {
+  stats_.emplace(std::move(name), parent, tls);
+  return *this;
+}
+
+template<typename T, typename U, typename Hash, typename Eq, typename Alloc>
+auto cache_builder<T, U, Hash, Eq, Alloc>::no_stats()
+noexcept
+-> cache_builder& {
+  stats_.reset();
+  return *this;
+}
+
+template<typename T, typename U, typename Hash, typename Eq, typename Alloc>
 template<typename NewHash>
 constexpr auto cache_builder<T, U, Hash, Eq, Alloc>::with_hash(NewHash hash) const
 -> cache_builder<T, U, NewHash, Eq, Alloc> {
@@ -583,6 +641,12 @@ constexpr auto cache_builder_vars::async() const
 noexcept
 -> bool {
   return async_;
+}
+
+constexpr auto cache_builder_vars::stats() const
+noexcept
+-> const std::optional<stats_vars>& {
+  return stats_;
 }
 
 template<typename T, typename U, typename Hash, typename Eq, typename Alloc>

@@ -19,8 +19,18 @@
 #include <monsoon/cache/max_size_decorator.h>
 #include <monsoon/cache/element.h>
 #include <monsoon/cache/mem_use.h>
+#if __has_include(<instrumentation/group.h>)
+# include <monsoon/cache/stats.h>
+#endif
 
 namespace monsoon::cache {
+
+
+#if !__has_include(<instrumentation/group.h>)
+class stats_decorator; // Unused, but we require the name.
+#endif
+
+
 ///\brief Helpers for the builder::build() method.
 ///\ingroup cache_detail
 namespace builder_detail {
@@ -106,6 +116,33 @@ struct cache_decorator_set {
     return {};
   }
 };
+
+
+template<typename NextApply>
+struct apply_stats_ {
+  template<typename... D>
+  auto operator()(cache_decorator_set<D...> d)
+  -> decltype(auto) {
+    if (b.stats().has_value()) {
+#if __has_include(<instrumentation/group.h>)
+      return next(d.template add<stats_decorator>());
+#else
+      throw std::logic_error("stats declared, but instrumentation headers are missing");
+#endif
+    } else {
+      return next(d);
+    }
+  }
+
+  const cache_builder_vars& b;
+  NextApply next;
+};
+
+template<typename NextApply>
+constexpr auto apply_stats(const cache_builder_vars& b, NextApply&& next)
+-> apply_stats_<std::decay_t<NextApply>> {
+  return { b, std::forward<NextApply>(next) };
+}
 
 
 template<typename NextApply>
@@ -294,12 +331,39 @@ template<typename Cache>
 constexpr bool has_set_mem_use = has_set_mem_use_<Cache>::value;
 
 
+template<typename Impl, typename = void>
+struct stats_impl {
+  stats_impl([[maybe_unused]] const cache_builder_vars& vars) noexcept {}
+
+  auto set_stats([[maybe_unused]] Impl& impl)
+  noexcept
+  -> void {
+    /* SKIP */
+  }
+};
+#if __has_include(<instrumentation/group.h>)
+template<typename Impl>
+struct stats_impl<Impl, std::enable_if_t<std::is_base_of_v<stats_decorator, Impl>>>
+: public stats_record
+{
+  using stats_record::stats_record;
+
+  auto set_stats(stats_decorator& impl)
+  noexcept
+  -> void {
+    impl.set_stats_record(this);
+  }
+};
+#endif
+
+
 } /* namespace monsoon::cache::builder_detail::<unnamed> */
 
 
 template<typename K, typename V, typename Impl, typename Hash, typename Eq, typename Create>
 class wrapper final
 : public extended_cache_intf<K, V, Hash, Eq, typename Impl::alloc_t, Create>,
+  public stats_impl<Impl>,
   public Impl
 {
  public:
@@ -315,8 +379,11 @@ class wrapper final
       b.hash(),
       b.equality(),
       std::forward<CreateArg>(create)),
+    stats_impl<Impl>(b),
     Impl(b, alloc)
-  {}
+  {
+    this->stats_impl<Impl>::set_stats(*this);
+  }
 
   ~wrapper() noexcept {}
 
@@ -365,7 +432,8 @@ class wrapper final
 
 template<typename K, typename V, typename Impl, typename Hash, typename Eq, typename Alloc, typename Create>
 class sharded_wrapper final
-: public extended_cache_intf<K, V, Hash, Eq, typename Impl::alloc_t, Create>
+: public extended_cache_intf<K, V, Hash, Eq, typename Impl::alloc_t, Create>,
+  public stats_impl<Impl>
 {
  public:
   using key_type = typename extended_cache_intf<K, V, Hash, Eq, typename Impl::alloc_t, Create>::key_type;
@@ -390,6 +458,7 @@ class sharded_wrapper final
       b.hash(),
       b.equality(),
       std::forward<CreateArg>(create)),
+    stats_impl<Impl>(b),
     alloc_(alloc)
   {
     assert(shards > 1);
@@ -426,6 +495,9 @@ class sharded_wrapper final
       traits::deallocate(impl_alloc, shards_, shards);
       throw;
     }
+
+    for (auto* i = shards_; i != shards_ + num_shards_; ++i)
+      this->stats_impl<Impl>::set_stats(*i);
   }
 
   ~sharded_wrapper() noexcept {
@@ -515,34 +587,35 @@ auto cache_builder<K, V, Hash, Eq, Alloc>::build(Fn&& fn) const
       : (concurrency() == 0u ? std::thread::hardware_concurrency() : concurrency()));
 
   auto builder_impl =
-      apply_async(*this,
-          apply_max_age(*this,
-              apply_access_expire(*this,
-                  apply_key_type(*this,
-                      apply_thread_safe(*this,
-                          apply_max_size(*this,
-                              apply_max_mem(*this,
-                                  [this, &fn, shards, &alloc, &mem_tracking](auto decorators) -> std::shared_ptr<extended_cache_intf<K, V, Hash, Eq, Alloc, std::decay_t<Fn>>> {
-                                    using basic_type = typename decltype(decorators)::template cache_type<V, Alloc>;
-                                    using wrapper_type = wrapper<K, V, basic_type, Hash, Eq, std::decay_t<Fn>>;
-                                    using sharded_wrapper_type = sharded_wrapper<K, V, basic_type, Hash, Eq, Alloc, std::decay_t<Fn>>;
+      apply_stats(*this,
+          apply_async(*this,
+              apply_max_age(*this,
+                  apply_access_expire(*this,
+                      apply_key_type(*this,
+                          apply_thread_safe(*this,
+                              apply_max_size(*this,
+                                  apply_max_mem(*this,
+                                      [this, &fn, shards, &alloc, &mem_tracking](auto decorators) -> std::shared_ptr<extended_cache_intf<K, V, Hash, Eq, Alloc, std::decay_t<Fn>>> {
+                                        using basic_type = typename decltype(decorators)::template cache_type<V, Alloc>;
+                                        using wrapper_type = wrapper<K, V, basic_type, Hash, Eq, std::decay_t<Fn>>;
+                                        using sharded_wrapper_type = sharded_wrapper<K, V, basic_type, Hash, Eq, Alloc, std::decay_t<Fn>>;
 
-                                    if (shards > 1u) {
-                                      auto impl = std::allocate_shared<sharded_wrapper_type>(
-                                          alloc,
-                                          *this, shards, std::forward<Fn>(fn), alloc);
-                                      if constexpr(has_set_mem_use<basic_type>)
-                                        impl->set_mem_use(std::move(mem_tracking));
-                                      return impl;
-                                    } else {
-                                      auto impl = std::allocate_shared<wrapper_type>(
-                                          alloc,
-                                          *this, std::forward<Fn>(fn), alloc);
-                                      if constexpr(has_set_mem_use<basic_type>)
-                                        impl->set_mem_use(std::move(mem_tracking));
-                                      return impl;
-                                    }
-                                  })))))));
+                                        if (shards > 1u) {
+                                          auto impl = std::allocate_shared<sharded_wrapper_type>(
+                                              alloc,
+                                              *this, shards, std::forward<Fn>(fn), alloc);
+                                          if constexpr(has_set_mem_use<basic_type>)
+                                            impl->set_mem_use(std::move(mem_tracking));
+                                          return impl;
+                                        } else {
+                                          auto impl = std::allocate_shared<wrapper_type>(
+                                              alloc,
+                                              *this, std::forward<Fn>(fn), alloc);
+                                          if constexpr(has_set_mem_use<basic_type>)
+                                            impl->set_mem_use(std::move(mem_tracking));
+                                          return impl;
+                                        }
+                                      }))))))));
 
   return extended_cache<K, V, Hash, Eq, Alloc, std::decay_t<Fn>>(
       builder_impl(cache_decorator_set<>().template add<weaken_decorator>()));

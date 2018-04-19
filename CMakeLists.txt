@@ -6,6 +6,7 @@ set(MONSOON_CACHE_VERSION_MINOR 0 CACHE STRING "minor version" FORCE)
 set(MONSOON_CACHE_VERSION ${MONSOON_CACHE_VERSION_MAJOR}.${MONSOON_CACHE_VERSION_MINOR} CACHE STRING "version" FORCE)
 
 enable_testing()
+find_package(instrumentation)
 
 include (CheckCXXCompilerFlag)
 check_cxx_compiler_flag ("-std=c++17" STD_CXX17)
@@ -41,6 +42,9 @@ set(headers
     )
 
 add_library(monsoon_cache INTERFACE)
+if(instrumentation_DIR)
+  target_link_libraries(monsoon_cache INTERFACE instrumentation)
+endif()
 
 find_package (Threads REQUIRED)
 if(CMAKE_USE_PTHREADS_INIT)
