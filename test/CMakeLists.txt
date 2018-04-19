@@ -1,10 +1,20 @@
 include(CTest)
 find_package(UnitTest++)
 
+macro (do_test binary)
+  add_executable (test_${binary} ${binary}.cc)
+  target_link_libraries (test_${binary} UnitTest++ monsoon_cache)
+  add_test (${binary} test_${binary})
+endmacro (do_test)
+
 if (UnitTest++_FOUND)
   include_directories(${UTPP_INCLUDE_DIRS})
 
-  add_executable (test_cache cache.cc)
-  target_link_libraries (test_cache UnitTest++ monsoon_cache)
-  add_test (cache test_cache)
+  do_test (base_case)
+  do_test (access_expire)
+  do_test (async)
+  do_test (async_exception)
+  do_test (cache_memory)
+  do_test (cache_size)
+  do_test (max_age)
 endif ()
