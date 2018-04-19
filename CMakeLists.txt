@@ -36,6 +36,7 @@ set(headers
     include/monsoon/cache/max_age_decorator.h
     include/monsoon/cache/max_size_decorator.h
     include/monsoon/cache/mem_use.h
+    include/monsoon/cache/stats.h
     include/monsoon/cache/store_delete_lock.h
     include/monsoon/cache/thread_safe_decorator.h
     include/monsoon/cache/weaken_decorator.h
