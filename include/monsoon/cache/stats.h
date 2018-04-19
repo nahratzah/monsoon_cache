@@ -43,7 +43,6 @@ class stats_record {
     ++deletes_;
   }
 
- private:
   static auto make_tags(const cache_builder_vars& vars)
   -> instrumentation::tag_map {
     if (vars.stats()->tls) {
@@ -53,8 +52,13 @@ class stats_record {
     return {};
   }
 
+ private:
   const std::string group_name_;
+
+ protected:
   instrumentation::tagged_group<0> instrumentation_group;
+
+ private:
   instrumentation::counter hits_, misses_, deletes_;
 };
 

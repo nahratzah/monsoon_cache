@@ -7,8 +7,10 @@
 #include <cassert>
 #include <memory>
 #include <thread>
+#include <vector>
 #include <type_traits>
 #include <utility>
+#include <limits>
 #include <monsoon/cache/builder.h>
 #include <monsoon/cache/cache_impl.h>
 #include <monsoon/cache/thread_safe_decorator.h>
@@ -21,6 +23,7 @@
 #include <monsoon/cache/mem_use.h>
 #if __has_include(<instrumentation/group.h>)
 # include <monsoon/cache/stats.h>
+# include <instrumentation/gauge.h>
 #endif
 
 namespace monsoon::cache {
@@ -332,7 +335,8 @@ constexpr bool has_set_mem_use = has_set_mem_use_<Cache>::value;
 
 
 template<typename Impl, typename = void>
-struct stats_impl {
+class stats_impl {
+ public:
   stats_impl([[maybe_unused]] const cache_builder_vars& vars) noexcept {}
 
   auto set_stats([[maybe_unused]] Impl& impl)
@@ -340,19 +344,51 @@ struct stats_impl {
   -> void {
     /* SKIP */
   }
+
+  auto add_mem_use(const std::shared_ptr<const mem_use>& mptr)
+  noexcept
+  -> void {
+    /* SKIP */
+  }
 };
 #if __has_include(<instrumentation/group.h>)
 template<typename Impl>
-struct stats_impl<Impl, std::enable_if_t<std::is_base_of_v<stats_decorator, Impl>>>
+class stats_impl<Impl, std::enable_if_t<std::is_base_of_v<stats_decorator, Impl>>>
 : public stats_record
 {
-  using stats_record::stats_record;
+ public:
+  stats_impl(const cache_builder_vars& vars)
+  : stats_record(vars),
+    mem_use_gauge_("memory", [this]() { return compute_mem_use_(); }, this->instrumentation_group, make_tags(vars))
+  {}
+
+  stats_impl(const stats_impl&) = delete;
 
   auto set_stats(stats_decorator& impl)
   noexcept
   -> void {
     impl.set_stats_record(this);
   }
+
+  auto add_mem_use(const std::shared_ptr<const mem_use>& mptr)
+  -> void {
+    mem_use_.push_back(mptr);
+  }
+
+ private:
+  auto compute_mem_use_() const
+  noexcept
+  -> std::int64_t {
+    std::uintptr_t sigma = 0;
+    for (const auto& mptr : mem_use_)
+      sigma += mptr->get();
+    if (sigma > std::numeric_limits<std::int64_t>::max())
+      sigma = std::numeric_limits<std::int64_t>::max();
+    return std::int64_t(sigma);
+  }
+
+  std::vector<std::shared_ptr<const mem_use>> mem_use_;
+  instrumentation::gauge<std::int64_t> mem_use_gauge_;
 };
 #endif
 
@@ -386,6 +422,14 @@ class wrapper final
   }
 
   ~wrapper() noexcept {}
+
+  auto set_mem_use(std::shared_ptr<mem_use>&& mptr)
+  noexcept
+  -> void {
+    this->stats_impl<Impl>::add_mem_use(mptr);
+    if constexpr(has_set_mem_use<Impl>)
+      this->Impl::set_mem_use(std::move(mptr));
+  }
 
   auto get_if_present(const key_type& k)
   -> pointer
@@ -482,6 +526,7 @@ class sharded_wrapper final
       while (num_shards_ < shards) {
         impl_alloc_t alloc_copy = impl_alloc;
         auto mem_tracking = create_mem_tracking(alloc_copy);
+        this->stats_impl<Impl>::add_mem_use(mem_tracking);
         traits::construct(impl_alloc, shards_ + num_shards_, b, alloc_copy);
         if constexpr(has_set_mem_use<Impl>)
           shards_[num_shards_].set_mem_use(mem_tracking);
@@ -511,11 +556,12 @@ class sharded_wrapper final
     traits::deallocate(alloc_, shards_, shards);
   }
 
-  template<bool Enable = has_set_mem_use<Impl>>
   auto set_mem_use(std::shared_ptr<mem_use>&& mptr)
   noexcept
-  -> std::enable_if_t<Enable> {
-    shards_[0].set_mem_use(std::move(mptr));
+  -> void {
+    this->stats_impl<Impl>::add_mem_use(mptr);
+    if constexpr(has_set_mem_use<Impl>)
+      shards_[0].set_mem_use(std::move(mptr));
   }
 
   auto get_if_present(const key_type& k)
@@ -604,15 +650,13 @@ auto cache_builder<K, V, Hash, Eq, Alloc>::build(Fn&& fn) const
                                           auto impl = std::allocate_shared<sharded_wrapper_type>(
                                               alloc,
                                               *this, shards, std::forward<Fn>(fn), alloc);
-                                          if constexpr(has_set_mem_use<basic_type>)
-                                            impl->set_mem_use(std::move(mem_tracking));
+                                          impl->set_mem_use(std::move(mem_tracking));
                                           return impl;
                                         } else {
                                           auto impl = std::allocate_shared<wrapper_type>(
                                               alloc,
                                               *this, std::forward<Fn>(fn), alloc);
-                                          if constexpr(has_set_mem_use<basic_type>)
-                                            impl->set_mem_use(std::move(mem_tracking));
+                                          impl->set_mem_use(std::move(mem_tracking));
                                           return impl;
                                         }
                                       }))))))));
