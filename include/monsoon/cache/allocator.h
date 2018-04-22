@@ -273,7 +273,7 @@ class cache_allocator
   template<typename OtherAllocator,
       typename = std::enable_if_t<std::is_constructible_v<Allocator, const OtherAllocator&>>>
   cache_allocator(const OtherAllocator& a)
-  : Allocator(std::forward<OtherAllocator>(a))
+  : Allocator(a)
   {}
 
   ///\brief Conversion constructor.
