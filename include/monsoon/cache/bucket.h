@@ -135,11 +135,12 @@ class bucket {
     store_type* new_store = create_fn(alloc_hint);
     lookup_type new_ptr = new_store->ptr();
     created = store_delete_lock<store_type>(new_store); // Inform called of newly constructed store.
-    owner.on_create(*created);
     *iter = new_store; // Link.
+    owner.on_create(*created);
 
     assert(!store_type::is_nil(new_ptr)
         && new_store->hash() == hash_code);
+    assert(validation_is_present_(new_store)); // owner.on_create event may not delete the newly created item!
     return new_ptr;
   }
 
@@ -223,6 +224,15 @@ class bucket {
       successor_ptr(*s) = dst.head_; // Link chain of dst after s.
       dst.head_ = s; // Link s into dst.
     }
+  }
+
+  ///\brief Validation function: check if s is in this bucket.
+  auto validation_is_present_(store_type* s) const
+  noexcept
+  -> bool {
+    for (const store_type* iter = head_; iter != nullptr; iter = successor_ptr(*iter))
+      if (iter == s) return true;
+    return false;
   }
 
  private:

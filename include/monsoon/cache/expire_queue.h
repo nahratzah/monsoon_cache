@@ -332,6 +332,7 @@ class base_expire_queue {
       StoreType* r = cold_q.pred<StoreType>();
       expire_link* r_link = r;
 
+      impl.assert_is_present_(r);
       assert(r_link->get_queue_id() == queue_id::cold);
       r->weaken();
       r_link->unlink();
@@ -344,6 +345,7 @@ class base_expire_queue {
         StoreType* r = hot_q.pred<StoreType>();
         expire_link* r_link = r;
 
+        impl.assert_is_present_(r);
         assert(r_link->get_queue_id() == queue_id::hot);
         r->weaken();
         r_link->unlink();

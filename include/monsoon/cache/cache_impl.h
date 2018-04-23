@@ -15,6 +15,11 @@
 #include <stdexcept>
 #include <utility>
 
+#ifndef NDEBUG
+# include <iostream>
+# include <exception>
+#endif
+
 namespace monsoon::cache {
 namespace {
 
@@ -96,7 +101,7 @@ struct decorator_on_delete_ {
 template<typename S, typename D>
 struct decorator_on_delete_<S, D, std::void_t<decltype(std::declval<D&>().on_delete(std::declval<S&>()))>> {
   static_assert(noexcept(std::declval<D&>().on_delete(std::declval<S&>())),
-      "on_create must be a noexcept function.");
+      "on_delete must be a noexcept function.");
   static auto apply(S& s, D& d) { d.on_delete(s); }
 };
 
@@ -284,6 +289,11 @@ class cache_impl
    * \returns True if the element was removed, false otherwise.
    */
   auto erase_if_expired(store_type& s) noexcept -> bool;
+  /**
+   * \brief Assert that s is present and in the correct bucket.
+   * \details Only performs its work if NDEBUG is not defined.
+   */
+  auto assert_is_present_(store_type* s) const noexcept -> void;
 
   /**
    * \brief Find element if it is present in the cache.
@@ -487,6 +497,58 @@ noexcept
   } else {
     return false;
   }
+}
+
+template<typename T, typename A, typename... D>
+auto cache_impl<T, A, D...>::assert_is_present_(store_type* s) const
+noexcept
+-> void {
+#ifndef NDEBUG
+  assert(!buckets_.empty());
+
+  if (buckets_[s->hash() % buckets_.size()].validation_is_present_(s))
+    return;
+
+  std::cerr
+      << "s "
+      << s
+      << " (hash="
+      << s->hash()
+      <<") should be in bucket "
+      << (s->hash() % buckets_.size())
+      << ", but is not...\n";
+
+  std::optional<typename bucket_vector::const_iterator::difference_type> b_idx;
+  for (typename bucket_vector::const_iterator bucket_iter = buckets_.begin();
+      !b_idx.has_value() && bucket_iter != buckets_.end();
+      ++bucket_iter) {
+    if (bucket_iter->validation_is_present_(s)) {
+      b_idx = bucket_iter - buckets_.begin();
+    }
+  }
+
+  if (b_idx.has_value()) {
+    std::cerr
+        << "s "
+        << s
+        << " (hash="
+        << s->hash()
+        << ") found instead in bucket "
+        << *b_idx
+        << " (expected "
+        << (s->hash() % buckets_.size())
+        << ")\n";
+  } else {
+    std::cerr
+        << "s "
+        << s
+        << " (hash="
+        << s->hash()
+        << ") was not found at all\n";
+  }
+
+  std::terminate();
+#endif
 }
 
 template<typename T, typename A, typename... D>
