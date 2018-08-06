@@ -31,6 +31,9 @@ class cache_alloc_dealloc_observer {
   ///\param[in] sz The size of items.
   virtual void subtract_mem_use(std::uintptr_t n, std::uintptr_t sz) noexcept = 0;
 
+  ///\brief Destructor.
+  virtual ~cache_alloc_dealloc_observer() noexcept = default;
+
   template<typename... Allocators>
   static void maybe_set_stats(
       cache_allocator<Allocators...>& ca,
