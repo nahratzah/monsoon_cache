@@ -24,6 +24,7 @@ class mem_use
   mem_use(mem_use&&) = delete;
   mem_use& operator=(const mem_use&) = delete;
   mem_use& operator=(mem_use&&) = delete;
+  ~mem_use() noexcept override = default;
 
   auto add_mem_use(std::uintptr_t n, std::uintptr_t sz)
   noexcept
