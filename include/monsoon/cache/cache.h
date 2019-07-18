@@ -61,6 +61,9 @@ class cache_intf<void, V> {
 
   virtual ~cache_intf() noexcept {}
 
+  virtual auto expire(const key_type& key)
+  -> bool = 0;
+
   virtual auto get_if_present(const key_type& key)
   -> pointer = 0;
 
