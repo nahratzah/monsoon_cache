@@ -49,6 +49,53 @@ class bucket {
 #endif
 
   /**
+   * \brief Expire element with given key.
+   * \details
+   * Iterates over all elements in the bucket.
+   * While iterating, erases any expired entries.
+   * \params[in] owner The cache implementation, used to invoke on_delete.
+   * \param[in] hash_code The hash code of the object to search.
+   * \param[in] predicate Predicate matching the object to search.
+   * \returns True if an element was expired, false otherwise.
+   */
+  template<typename CacheImpl, typename Predicate>
+  auto expire(CacheImpl& owner, std::size_t hash_code, Predicate predicate)
+  noexcept
+  -> bool {
+    store_type** iter = &head_; // Essentially a before-iterator, like in std::forward_list.
+
+    while (*iter != nullptr) {
+      store_type* s = *iter;
+
+      // Clean up expired entries as we traverse.
+      if (s->is_expired()) {
+        // Skip deletion if the use counter indicates the element is referenced.
+        if (s->use_count.load(std::memory_order_acquire) != 0u) {
+          // We don't update the allocation hint, as this element will likely disappear next time.
+          iter = &successor_ptr(*s); // Advance iter.
+          continue;
+        }
+
+        *iter = successor_ptr(*s); // Unlink s.
+        owner.on_delete(*s);
+        continue;
+      }
+
+      if (s->hash() == hash_code && predicate(*s)) {
+        s->expire();
+        if (s->use_count.load(std::memory_order_acquire) == 0u) {
+          *iter = successor_ptr(*s); // Unlink s.
+          owner.on_delete(*s);
+        }
+        return true;
+      }
+
+      iter = &successor_ptr(*s); // Advance iter.
+    }
+    return false;
+  }
+
+  /**
    * \brief Look up element with given key.
    * \param[in] hash_code The hash code of the object to search.
    * \param[in] predicate Predicate matching the object to search.

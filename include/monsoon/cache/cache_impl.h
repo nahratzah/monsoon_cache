@@ -296,6 +296,19 @@ class cache_impl
   auto assert_is_present_(store_type* s) const noexcept -> void;
 
   /**
+   * \brief Find element if it is present in the cache and mark it as expired.
+   * \details Tries to expire the element.
+   *
+   * Even a cache hit will not update on_hit callbacks (and thus not count as
+   * a hit).
+   *
+   * \param[in] hash_code Hash code for the object to find.
+   * \param[in] predicate Predicate matcher for the object to find.
+   */
+  template<typename Predicate>
+  auto expire(std::size_t hash_code, Predicate predicate) noexcept -> bool;
+
+  /**
    * \brief Find element if it is present in the cache.
    * \details Tries to find the element.
    *
@@ -549,6 +562,24 @@ noexcept
 
   std::terminate();
 #endif
+}
+
+template<typename T, typename A, typename... D>
+template<typename Predicate>
+auto cache_impl<T, A, D...>::expire(
+    std::size_t hash_code,
+    Predicate predicate)
+noexcept
+-> bool {
+  // Acquire lock on the cache.
+  // One of the decorators is to supply lock() and unlock() methods,
+  // that can be called on a const-reference of this.
+  std::lock_guard<const cache_impl> lck{ *this };
+
+  // Execute query.
+  assert(buckets_.size() > 0);
+  return buckets_[hash_code % buckets_.size()]
+      .expire(*this, hash_code, std::move(predicate));
 }
 
 template<typename T, typename A, typename... D>

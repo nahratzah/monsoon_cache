@@ -107,6 +107,7 @@ class basic_element {
 
     future_type fut;
     bool strong = true;
+    bool expired = false;
   };
 
   using internal_ptr_type = std::conditional_t<is_async,
@@ -203,6 +204,14 @@ class basic_element {
    * \returns The true if the value was strengthened, false otherwise.
    */
   auto strengthen() noexcept -> bool;
+
+  /**
+   * \brief Mark the element as expired.
+   *
+   * \details
+   * Changes the element to hold the monotype, indicating it holds no valid data.
+   */
+  auto expire() noexcept -> void;
 
  private:
   std::size_t hash_ = 0;
@@ -411,7 +420,9 @@ auto basic_element<T, Async>::resolve()
       // Update plain pointer.
       plain_ptr_ = ptr.get();
       // Update ptr_ with resolved pointer value.
-      if (std::get<async_type>(ptr_).strong)
+      if (std::get<async_type>(ptr_).expired)
+        ptr_.template emplace<std::monostate>();
+      else if (std::get<async_type>(ptr_).strong)
         ptr_.template emplace<pointer>(ptr);
       else
         ptr_.template emplace<weak_pointer>(ptr);
@@ -454,6 +465,21 @@ noexcept
     }
   }
   return !std::holds_alternative<weak_pointer>(ptr_);
+}
+
+template<typename T, bool Async>
+auto basic_element<T, Async>::expire()
+noexcept
+-> void {
+  if constexpr(is_async) {
+    if (std::holds_alternative<async_type>(ptr_)) {
+      std::get<async_type>(ptr_).expired = true;
+      return;
+    }
+  }
+
+  if (std::holds_alternative<weak_pointer>(ptr_) || std::holds_alternative<pointer>(ptr_))
+    ptr_.template emplace<std::monostate>();
 }
 
 

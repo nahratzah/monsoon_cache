@@ -32,6 +32,9 @@ class cache_intf {
 
   virtual ~cache_intf() noexcept {}
 
+  virtual auto expire(const key_type& key)
+  -> bool = 0;
+
   virtual auto get_if_present(const key_type& key)
   -> pointer = 0;
 
@@ -246,6 +249,16 @@ class cache {
 
  public:
   /**
+   * \brief Expire an element in the cache.
+   * \param[in] key The key of the entry that is to be expired.
+   * \returns True if the element was found and expired by this function.
+   */
+  auto expire(const key_type& key)
+  -> bool {
+    return impl_->expire(key);
+  }
+
+  /**
    * \brief Retrieve a value if it is present in the cache.
    * \param[in] key The key of the entry that is to be found.
    * \returns The mapped value corresponding to the \p key,
@@ -370,6 +383,16 @@ class extended_cache {
   {}
 
  public:
+  /**
+   * \brief Expire an element in the cache.
+   * \param[in] key The key of the entry that is to be expired.
+   * \returns True if the element was found and expired by this function.
+   */
+  auto expire(const key_type& key)
+  -> bool {
+    return impl_->expire(key);
+  }
+
   /**
    * \brief Retrieve a value if it is present in the cache.
    * \param[in] key The key of the entry that is to be found.

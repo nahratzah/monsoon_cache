@@ -431,6 +431,14 @@ class wrapper final
       this->Impl::set_mem_use(std::move(mptr));
   }
 
+  auto expire(const key_type& k)
+  -> bool
+  override {
+    return this->Impl::expire(
+        this->hash(k),
+        this->template bind_eq_<store_type>(k));
+  }
+
   auto get_if_present(const key_type& k)
   -> pointer
   override {
@@ -562,6 +570,16 @@ class sharded_wrapper final
     this->stats_impl<Impl>::add_mem_use(mptr);
     if constexpr(has_set_mem_use<Impl>)
       shards_[0].set_mem_use(std::move(mptr));
+  }
+
+  auto expire(const key_type& k)
+  -> bool
+  override {
+    std::size_t hash_code = this->hash(k);
+
+    return shards_[hash_multiplier * hash_code % num_shards_].expire(
+        hash_code,
+        this->template bind_eq_<store_type>(k));
   }
 
   auto get_if_present(const key_type& k)
