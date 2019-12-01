@@ -21,17 +21,13 @@
 #include <monsoon/cache/max_size_decorator.h>
 #include <monsoon/cache/element.h>
 #include <monsoon/cache/mem_use.h>
-#if __has_include(<instrumentation/group.h>)
-# include <monsoon/cache/stats.h>
-# include <instrumentation/gauge.h>
-#endif
+#include <monsoon/cache/stats.h>
+#include <instrumentation/gauge.h>
+#include <instrumentation/engine.h>
+#include <instrumentation/path.h>
+#include <instrumentation/tags.h>
 
 namespace monsoon::cache {
-
-
-#if !__has_include(<instrumentation/group.h>)
-class stats_decorator; // Unused, but we require the name.
-#endif
 
 
 ///\brief Helpers for the builder::build() method.
@@ -127,11 +123,7 @@ struct apply_stats_ {
   auto operator()(cache_decorator_set<D...> d)
   -> decltype(auto) {
     if (b.stats().has_value()) {
-#if __has_include(<instrumentation/group.h>)
       return next(d.template add<stats_decorator>());
-#else
-      throw std::logic_error("stats declared, but instrumentation headers are missing");
-#endif
     } else {
       return next(d);
     }
@@ -351,7 +343,7 @@ class stats_impl {
     /* SKIP */
   }
 };
-#if __has_include(<instrumentation/group.h>)
+
 template<typename Impl>
 class stats_impl<Impl, std::enable_if_t<std::is_base_of_v<stats_decorator, Impl>>>
 : public stats_record
@@ -359,7 +351,17 @@ class stats_impl<Impl, std::enable_if_t<std::is_base_of_v<stats_decorator, Impl>
  public:
   stats_impl(const cache_builder_vars& vars)
   : stats_record(vars),
-    mem_use_gauge_("memory", [this]() { return compute_mem_use_(); }, this->instrumentation_group, make_tags(vars))
+    mem_use_gauge_(
+        instrumentation::engine::global().new_gauge_cb(
+            instrumentation::path("monsoon.cache.memory"),
+            instrumentation::tags().with("name", vars.stats()->name),
+            [weak_vector=std::weak_ptr<const std::vector<std::shared_ptr<const mem_use>>>(this->mem_use_)]() -> std::int64_t {
+              auto vector = weak_vector.lock();
+              if (vector != nullptr) return compute_mem_use_(*vector);
+              return 0;
+            }
+        )
+    )
   {}
 
   stats_impl(const stats_impl&) = delete;
@@ -372,25 +374,24 @@ class stats_impl<Impl, std::enable_if_t<std::is_base_of_v<stats_decorator, Impl>
 
   auto add_mem_use(const std::shared_ptr<const mem_use>& mptr)
   -> void {
-    mem_use_.push_back(mptr);
+    mem_use_->push_back(mptr);
   }
 
  private:
-  auto compute_mem_use_() const
+  static auto compute_mem_use_(const std::vector<std::shared_ptr<const mem_use>>& mem_use_vector)
   noexcept
   -> std::int64_t {
     std::uintptr_t sigma = 0;
-    for (const auto& mptr : mem_use_)
+    for (const auto& mptr : mem_use_vector)
       sigma += mptr->get();
     if (sigma > std::numeric_limits<std::int64_t>::max())
       sigma = std::numeric_limits<std::int64_t>::max();
     return std::int64_t(sigma);
   }
 
-  std::vector<std::shared_ptr<const mem_use>> mem_use_;
-  instrumentation::gauge<std::int64_t> mem_use_gauge_;
+  std::shared_ptr<std::vector<std::shared_ptr<const mem_use>>> mem_use_ = std::make_shared<std::vector<std::shared_ptr<const mem_use>>>();
+  std::shared_ptr<void> mem_use_gauge_;
 };
-#endif
 
 
 } /* namespace monsoon::cache::builder_detail::<unnamed> */

@@ -4,7 +4,6 @@
 ///\file
 ///\ingroup cache_detail
 
-#include <instrumentation/group.h>
 #include <instrumentation/counter.h>
 #include <instrumentation/tags.h>
 #include <monsoon/cache/builder.h>
@@ -17,13 +16,13 @@ namespace monsoon::cache {
 
 class stats_record {
  public:
-  stats_record(const cache_builder_vars& vars)
-  : group_name_(vars.stats()->name),
-    instrumentation_group(this->group_name_, vars.stats()->parent),
-    hits_("hit", this->instrumentation_group, make_tags(vars)),
-    misses_("miss", this->instrumentation_group, make_tags(vars)),
-    deletes_("delete", this->instrumentation_group, make_tags(vars))
-  {}
+  stats_record(const cache_builder_vars& vars) {
+    if (!vars.stats()->name.empty()) {
+      hits_ = instrumentation::counter("monsoon.cache.hit", make_tags(vars));
+      misses_ = instrumentation::counter("monsoon.cache.miss", make_tags(vars));
+      deletes_ = instrumentation::counter("monsoon.cache.delete", make_tags(vars));
+    }
+  }
 
   auto on_hit()
   noexcept
@@ -44,19 +43,17 @@ class stats_record {
   }
 
   static auto make_tags(const cache_builder_vars& vars)
-  -> instrumentation::tag_map {
+  -> instrumentation::tags {
+    instrumentation::tags t;
+    t.with("name", vars.stats()->name);
+
     if (vars.stats()->tls) {
-      const std::string tid = (std::ostringstream() << std::this_thread::get_id()).str();
-      return { {instrumentation::tls_entry_key, std::move(tid)} };
+      std::ostringstream tid_stream;
+      tid_stream << std::this_thread::get_id();
+      t.with("thread", tid_stream.str());
     }
-    return {};
+    return t;
   }
-
- private:
-  const std::string group_name_;
-
- protected:
-  instrumentation::tagged_group<0> instrumentation_group;
 
  private:
   instrumentation::counter hits_, misses_, deletes_;

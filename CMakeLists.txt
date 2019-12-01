@@ -43,9 +43,7 @@ set(headers
     )
 
 add_library(monsoon_cache INTERFACE)
-if(instrumentation_DIR)
-  target_link_libraries(monsoon_cache INTERFACE instrumentation)
-endif()
+target_link_libraries(monsoon_cache INTERFACE instrumentation)
 
 find_package (Threads REQUIRED)
 if(CMAKE_USE_PTHREADS_INIT)

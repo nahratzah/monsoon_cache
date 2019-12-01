@@ -11,9 +11,6 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
-#if __has_include(<instrumentation/group.h>)
-# include <instrumentation/group.h>
-#endif
 
 namespace monsoon::cache {
 
@@ -21,21 +18,13 @@ namespace monsoon::cache {
 template<typename T, typename U, typename Hash, typename Eq, typename Alloc, typename Create>
 class extended_cache;
 
-#if __has_include(<instrumentation/group.h>)
-using group = instrumentation::group;
-#else
-struct group {};
-#endif
-
 struct stats_vars {
-  stats_vars(std::string name, group& parent, bool tls = false)
+  stats_vars(std::string name, bool tls = false)
   : name(std::move(name)),
-    parent(parent),
     tls(tls)
   {}
 
   std::string name;
-  group& parent;
   bool tls = false;
 };
 
@@ -301,7 +290,7 @@ class cache_builder
   ///\param[in] name A cache name, for identification of the statistics.
   ///\param[in] parent A parent group, under which to publish the statistics.
   ///\param[in] tls If set, the thread ID will be included in statistics.
-  auto stats(std::string name, group& parent, bool tls = false) noexcept -> cache_builder&;
+  auto stats(std::string name, bool tls = false) noexcept -> cache_builder&;
   ///\brief Disable instrumentation.
   ///\sa \ref cache_builder_vars::stats
   auto no_stats() noexcept -> cache_builder&;
@@ -559,10 +548,10 @@ noexcept
 }
 
 template<typename T, typename U, typename Hash, typename Eq, typename Alloc>
-auto cache_builder<T, U, Hash, Eq, Alloc>::stats(std::string name, group& parent, bool tls)
+auto cache_builder<T, U, Hash, Eq, Alloc>::stats(std::string name, bool tls)
 noexcept
 -> cache_builder& {
-  stats_.emplace(std::move(name), parent, tls);
+  stats_.emplace(std::move(name), tls);
   return *this;
 }
 
