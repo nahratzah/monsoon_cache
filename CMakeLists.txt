@@ -6,7 +6,7 @@ set(MONSOON_CACHE_VERSION_MINOR 2 CACHE STRING "minor version" FORCE)
 set(MONSOON_CACHE_VERSION ${MONSOON_CACHE_VERSION_MAJOR}.${MONSOON_CACHE_VERSION_MINOR} CACHE STRING "version" FORCE)
 
 enable_testing()
-find_package(instrumentation)
+find_package(instrumentation "1.0")
 
 include (CheckCXXCompilerFlag)
 check_cxx_compiler_flag ("-std=c++17" STD_CXX17)
