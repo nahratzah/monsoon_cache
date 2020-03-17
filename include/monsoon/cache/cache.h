@@ -21,14 +21,14 @@ namespace monsoon::cache {
  * \details The simple interface omits the variable arguments interface
  * of the \ref extended_cache_intf "extended cache".
  * \tparam K The key type of the cache.
- * \tparam V The mapped type of the cache.
+ * \tparam VPtr The mapped pointer type of the cache.
  * \sa \ref cache<K,V>
  */
-template<typename K, typename V>
+template<typename K, typename VPtr>
 class cache_intf {
  public:
   using key_type = K;
-  using pointer = std::shared_ptr<V>;
+  using pointer = typename std::pointer_traits<VPtr>::pointer;
 
   virtual ~cache_intf() noexcept {}
 
@@ -50,14 +50,14 @@ class cache_intf {
  * \ingroup cache_detail
  * \details The simple interface omits the variable arguments interface
  * of the \ref extended_cache_intf "extended cache".
- * \tparam V The mapped type of the cache.
+ * \tparam VPtr The mapped type of the cache.
  * \sa \ref cache<K,V>
  */
-template<typename V>
-class cache_intf<void, V> {
+template<typename VPtr>
+class cache_intf<void, VPtr> {
  public:
-  using key_type = std::decay_t<V>;
-  using pointer = std::shared_ptr<V>;
+  using key_type = typename std::pointer_traits<VPtr>::element_type;
+  using pointer = typename std::pointer_traits<VPtr>::pointer;
 
   virtual ~cache_intf() noexcept {}
 
@@ -80,20 +80,20 @@ class cache_intf<void, V> {
  * \details The extended interface allows for querying a cache using a set
  * of arguments.
  * \tparam K The key type of the cache.
- * \tparam V The mapped type of the cache.
+ * \tparam VPtr The mapped type of the cache.
  * \tparam Hash A hash function for the key.
  * \tparam Eq An equality predicate for the key.
  * \tparam Alloc Allocator used by the cache.
  * \tparam Create Mapped type construction function.
  * \sa \ref extended_cache<K,V>
  */
-template<typename K, typename V, typename Hash, typename Eq, typename Alloc, typename Create>
+template<typename K, typename VPtr, typename Hash, typename Eq, typename Alloc, typename Create>
 class extended_cache_intf
-: public cache_intf<K, V>
+: public cache_intf<K, VPtr>
 {
  public:
-  using key_type = typename cache_intf<K, V>::key_type;
-  using pointer = typename cache_intf<K, V>::pointer;
+  using key_type = typename cache_intf<K, VPtr>::key_type;
+  using pointer = typename cache_intf<K, VPtr>::pointer;
   using create_result_type =
       std::decay_t<decltype(std::declval<const Create&>()(std::declval<Alloc&>(), std::declval<const key_type&>()))>;
   using extended_query_type =
@@ -119,8 +119,8 @@ class extended_cache_intf
 
   ~extended_cache_intf() noexcept override {}
 
-  using cache_intf<K, V>::get_if_present;
-  using cache_intf<K, V>::get;
+  using cache_intf<K, VPtr>::get_if_present;
+  using cache_intf<K, VPtr>::get;
 
   virtual auto get(const extended_query_type& q) -> pointer = 0;
 
@@ -217,10 +217,10 @@ class cache {
   ///\brief Key type of the cache.
   ///\details
   ///For identity caches, this is the mapped type of the cache.
-  using key_type = typename cache_intf<K, V>::key_type;
+  using key_type = typename cache_intf<K, std::shared_ptr<V>>::key_type;
   ///\brief Pointer returned by the cache.
   ///\details Shared pointer to the mapped type.
-  using pointer = typename cache_intf<K, V>::pointer;
+  using pointer = typename cache_intf<K, std::shared_ptr<V>>::pointer;
 
   ///\bug Should we enable this, seeing as that cache is copyable?
   ///Current behaviour sends a clear message when you miss initialization,
@@ -246,7 +246,7 @@ class cache {
  private:
   ///\brief Constructor used by cache builder to initialize the cache.
   ///\param[in] impl A pointer to the implementation of the cache.
-  explicit cache(std::shared_ptr<cache_intf<K, V>>&& impl) noexcept
+  explicit cache(std::shared_ptr<cache_intf<K, std::shared_ptr<V>>>&& impl) noexcept
   : impl_(std::move(impl))
   {}
 
@@ -320,7 +320,7 @@ class cache {
 
  private:
   ///\brief Pointer to the implementation.
-  std::shared_ptr<cache_intf<K, V>> impl_;
+  std::shared_ptr<cache_intf<K, std::shared_ptr<V>>> impl_;
 };
 
 /**
@@ -348,7 +348,7 @@ class extended_cache {
   friend class cache_builder;
 
  private:
-  using extended_cache_type = extended_cache_intf<K, V, Hash, Eq, Alloc, Create>;
+  using extended_cache_type = extended_cache_intf<K, std::shared_ptr<V>, Hash, Eq, Alloc, Create>;
   using extended_query_type = typename extended_cache_type::extended_query_type;
 
  public:
@@ -380,7 +380,7 @@ class extended_cache {
   }
 
  private:
-  ///\copydoc cache::cache(std::shared_ptr<cache_intf<K, V>>&&)
+  ///\copydoc cache::cache(std::shared_ptr<cache_intf<K, std::shared_ptr<V>>>&&)
   extended_cache(std::shared_ptr<extended_cache_type>&& impl) noexcept
   : impl_(std::move(impl))
   {}
