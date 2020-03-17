@@ -397,22 +397,22 @@ class stats_impl<Impl, std::enable_if_t<std::is_base_of_v<stats_decorator, Impl>
 } /* namespace monsoon::cache::builder_detail::<unnamed> */
 
 
-template<typename K, typename V, typename Impl, typename Hash, typename Eq, typename Create>
+template<typename K, typename VPtr, typename Impl, typename Hash, typename Eq, typename Create>
 class wrapper final
-: public extended_cache_intf<K, V, Hash, Eq, typename Impl::alloc_t, Create>,
+: public extended_cache_intf<K, typename std::pointer_traits<VPtr>::element_type, Hash, Eq, typename Impl::alloc_t, Create>,
   public stats_impl<Impl>,
   public Impl
 {
  public:
-  using key_type = typename extended_cache_intf<K, V, Hash, Eq, typename Impl::alloc_t, Create>::key_type;
-  using pointer = typename extended_cache_intf<K, V, Hash, Eq, typename Impl::alloc_t, Create>::pointer;
+  using key_type = typename extended_cache_intf<K, typename std::pointer_traits<VPtr>::element_type, Hash, Eq, typename Impl::alloc_t, Create>::key_type;
+  using pointer = typename extended_cache_intf<K, typename std::pointer_traits<VPtr>::element_type, Hash, Eq, typename Impl::alloc_t, Create>::pointer;
   using store_type = typename Impl::store_type;
 
   template<typename CreateArg>
-  wrapper(const cache_builder<K, V, Hash, Eq, typename Impl::alloc_t>& b,
+  wrapper(const cache_builder<K, typename std::pointer_traits<VPtr>::element_type, Hash, Eq, typename Impl::alloc_t>& b,
       CreateArg&& create,
       typename Impl::alloc_t alloc)
-  : extended_cache_intf<K, V, Hash, Eq, typename Impl::alloc_t, Create>(
+  : extended_cache_intf<K, typename std::pointer_traits<VPtr>::element_type, Hash, Eq, typename Impl::alloc_t, Create>(
       b.hash(),
       b.equality(),
       std::forward<CreateArg>(create)),
@@ -483,14 +483,14 @@ class wrapper final
 };
 
 
-template<typename K, typename V, typename Impl, typename Hash, typename Eq, typename Alloc, typename Create>
+template<typename K, typename VPtr, typename Impl, typename Hash, typename Eq, typename Alloc, typename Create>
 class sharded_wrapper final
-: public extended_cache_intf<K, V, Hash, Eq, typename Impl::alloc_t, Create>,
+: public extended_cache_intf<K, typename std::pointer_traits<VPtr>::element_type, Hash, Eq, typename Impl::alloc_t, Create>,
   public stats_impl<Impl>
 {
  public:
-  using key_type = typename extended_cache_intf<K, V, Hash, Eq, typename Impl::alloc_t, Create>::key_type;
-  using pointer = typename extended_cache_intf<K, V, Hash, Eq, typename Impl::alloc_t, Create>::pointer;
+  using key_type = typename extended_cache_intf<K, typename std::pointer_traits<VPtr>::element_type, Hash, Eq, typename Impl::alloc_t, Create>::key_type;
+  using pointer = typename extended_cache_intf<K, typename std::pointer_traits<VPtr>::element_type, Hash, Eq, typename Impl::alloc_t, Create>::pointer;
   using store_type = typename Impl::store_type;
   static constexpr std::size_t hash_multiplier =
       (sizeof(std::size_t) <= 4
@@ -503,11 +503,11 @@ class sharded_wrapper final
   sharded_wrapper& operator=(sharded_wrapper&&) = delete;
 
   template<typename CreateArg>
-  sharded_wrapper(cache_builder<K, V, Hash, Eq, Alloc> b,
+  sharded_wrapper(cache_builder<K, typename std::pointer_traits<VPtr>::element_type, Hash, Eq, Alloc> b,
       unsigned int shards,
       CreateArg&& create,
       Alloc alloc)
-  : extended_cache_intf<K, V, Hash, Eq, typename Impl::alloc_t, Create>(
+  : extended_cache_intf<K, typename std::pointer_traits<VPtr>::element_type, Hash, Eq, typename Impl::alloc_t, Create>(
       b.hash(),
       b.equality(),
       std::forward<CreateArg>(create)),
@@ -662,8 +662,8 @@ auto cache_builder<K, V, Hash, Eq, Alloc>::build(Fn&& fn) const
                                   apply_max_mem(*this,
                                       [this, &fn, shards, &alloc, &mem_tracking](auto decorators) -> std::shared_ptr<extended_cache_intf<K, V, Hash, Eq, Alloc, std::decay_t<Fn>>> {
                                         using basic_type = typename decltype(decorators)::template cache_type<std::shared_ptr<V>, Alloc>;
-                                        using wrapper_type = wrapper<K, V, basic_type, Hash, Eq, std::decay_t<Fn>>;
-                                        using sharded_wrapper_type = sharded_wrapper<K, V, basic_type, Hash, Eq, Alloc, std::decay_t<Fn>>;
+                                        using wrapper_type = wrapper<K, std::shared_ptr<V>, basic_type, Hash, Eq, std::decay_t<Fn>>;
+                                        using sharded_wrapper_type = sharded_wrapper<K, std::shared_ptr<V>, basic_type, Hash, Eq, Alloc, std::decay_t<Fn>>;
 
                                         if (shards > 1u) {
                                           auto impl = std::allocate_shared<sharded_wrapper_type>(
