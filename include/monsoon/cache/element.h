@@ -4,6 +4,7 @@
 ///\file
 ///\ingroup cache_detail
 
+#include <monsoon/cache/storage_pointer_decorator.h>
 #include <atomic>
 #include <cassert>
 #include <cstddef>
@@ -80,17 +81,21 @@ struct async_element_decorator {
  * Separating it from decorators should make the generated code a bit more
  * compact, or faster to compile.
  *
- * \tparam T The type of element held.
+ * \tparam PointerDecorator A storage pointer decorator.
  * \tparam Async If true, indicates that the basic_element may hold futures.
  */
-template<typename TPtr, bool Async>
-class basic_element {
+template<typename TPtr, bool Async> class basic_element;
+
+template<typename TPtr, typename SPtr, typename VToS, typename SToV, bool Async>
+class basic_element<storage_pointer_decorator<TPtr, SPtr, VToS, SToV>, Async> {
  public:
-  using type = typename std::pointer_traits<TPtr>::element_type;
-  using pointer = typename std::pointer_traits<TPtr>::pointer;
+  using storage_spec = typename storage_pointer_decorator<TPtr, SPtr, VToS, SToV>::spec;
+  using type = typename storage_pointer_decorator<TPtr, SPtr, VToS, SToV>::element_type;
+  using pointer = typename storage_pointer_decorator<TPtr, SPtr, VToS, SToV>::pointer_type;
   using simple_pointer = std::add_pointer_t<type>;
   using const_reference = std::add_lvalue_reference_t<std::add_const_t<type>>;
-  using weak_pointer = typename pointer::weak_type;
+  using weak_pointer = typename storage_pointer_decorator<TPtr, SPtr, VToS, SToV>::weak_type;
+  using storage_pointer = typename storage_pointer_decorator<TPtr, SPtr, VToS, SToV>::storage_pointer_type;
   static constexpr bool is_async = Async;
   using future_type = std::conditional_t<is_async,
       std::shared_future<pointer>,
@@ -111,8 +116,8 @@ class basic_element {
   };
 
   using internal_ptr_type = std::conditional_t<is_async,
-      std::variant<std::monostate, weak_pointer, pointer, async_type>,
-      std::variant<std::monostate, weak_pointer, pointer>>;
+      std::variant<std::monostate, weak_pointer, storage_pointer, async_type>,
+      std::variant<std::monostate, weak_pointer, storage_pointer>>;
 
  public:
   static auto is_nil(const ptr_return_type& p) noexcept -> bool;
@@ -138,7 +143,7 @@ class basic_element {
    *    Decorators are expected to retrieve their information using
    *    std::get<type> on the \p decorator_ctx.
    */
-  explicit basic_element(std::shared_ptr<type> init, std::size_t hash) noexcept;
+  explicit basic_element(const storage_spec& spec, pointer init, std::size_t hash) noexcept;
 
   /**
    * \brief Constructor for the async case of element.
@@ -150,7 +155,7 @@ class basic_element {
    *    std::get<type> on the \p decorator_ctx.
    */
   template<bool Enable = is_async>
-  explicit basic_element(std::enable_if_t<Enable, future_type> init, std::size_t hash) noexcept;
+  explicit basic_element(const storage_spec& spec, std::enable_if_t<Enable, future_type> init, std::size_t hash) noexcept;
 
   ///\brief Returns the hash code of the underlying pointer.
   ///\details The hash code remains the same, irresepective of wether the
@@ -223,6 +228,9 @@ class basic_element {
   ///\note We use an atomic, so we don't have to think about the cache lock when releasing.
   ///\bug Optimization: use count should only be an atomic if the cache is thread safe.
   std::atomic<unsigned int> use_count{ 0u };
+
+ private:
+  const storage_spec& spec;
 };
 
 /**
@@ -243,14 +251,15 @@ class basic_element {
  */
 template<typename TPtr, typename... Decorators>
 class element
-: public basic_element<TPtr, std::disjunction_v<std::is_base_of<async_element_decorator, Decorators>...>>,
+: public basic_element<default_storage_pointer_decorator<TPtr>, std::disjunction_v<std::is_base_of<async_element_decorator, Decorators>...>>,
   public Decorators...
 {
  public:
-  using type = typename basic_element<TPtr, std::disjunction_v<std::is_base_of<async_element_decorator, Decorators>...>>::type;
-  using future_type = typename basic_element<TPtr, std::disjunction_v<std::is_base_of<async_element_decorator, Decorators>...>>::future_type;
-  using ptr_return_type = typename basic_element<TPtr, std::disjunction_v<std::is_base_of<async_element_decorator, Decorators>...>>::ptr_return_type;
-  using pointer = typename basic_element<TPtr, std::disjunction_v<std::is_base_of<async_element_decorator, Decorators>...>>::pointer;
+  using storage_spec = typename basic_element<default_storage_pointer_decorator<TPtr>, std::disjunction_v<std::is_base_of<async_element_decorator, Decorators>...>>::storage_spec;
+  using type = typename basic_element<default_storage_pointer_decorator<TPtr>, std::disjunction_v<std::is_base_of<async_element_decorator, Decorators>...>>::type;
+  using future_type = typename basic_element<default_storage_pointer_decorator<TPtr>, std::disjunction_v<std::is_base_of<async_element_decorator, Decorators>...>>::future_type;
+  using ptr_return_type = typename basic_element<default_storage_pointer_decorator<TPtr>, std::disjunction_v<std::is_base_of<async_element_decorator, Decorators>...>>::ptr_return_type;
+  using pointer = typename basic_element<default_storage_pointer_decorator<TPtr>, std::disjunction_v<std::is_base_of<async_element_decorator, Decorators>...>>::pointer;
 
   /**
    * \brief Create an element pointing at the given init pointer.
@@ -263,7 +272,7 @@ class element
    */
   template<typename Alloc, typename... DecoratorCtx>
   explicit element(std::allocator_arg_t tag, Alloc alloc,
-      std::shared_ptr<type> init, std::size_t hash,
+      pointer init, std::size_t hash,
       std::tuple<DecoratorCtx...> decorator_ctx) noexcept;
 
   /**
@@ -290,9 +299,9 @@ class element
 template<typename TPtr, typename... D>
 template<typename Alloc, typename... DecoratorCtx>
 element<TPtr, D...>::element(std::allocator_arg_t tag, Alloc alloc,
-    std::shared_ptr<type> init, std::size_t hash,
+    pointer init, std::size_t hash,
     std::tuple<DecoratorCtx...> decorator_ctx) noexcept
-: basic_element<TPtr, std::disjunction_v<std::is_base_of<async_element_decorator, D>...>>(std::move(init), hash),
+: basic_element<default_storage_pointer_decorator<TPtr>, std::disjunction_v<std::is_base_of<async_element_decorator, D>...>>(storage_spec(), std::move(init), hash),
   D(tag, alloc, decorator_ctx)...
 {}
 
@@ -301,7 +310,7 @@ template<typename Alloc, typename... DecoratorCtx, bool Enable>
 element<TPtr, D...>::element(std::allocator_arg_t tag, Alloc alloc,
     std::enable_if_t<Enable, future_type> init, std::size_t hash,
     std::tuple<DecoratorCtx...> decorator_ctx) noexcept
-: basic_element<TPtr, std::disjunction_v<std::is_base_of<async_element_decorator, D>...>>(std::move(init), hash),
+: basic_element<default_storage_pointer_decorator<TPtr>, std::disjunction_v<std::is_base_of<async_element_decorator, D>...>>(storage_spec(), std::move(init), hash),
   D(tag, alloc, decorator_ctx)...
 {}
 
@@ -309,7 +318,7 @@ template<typename TPtr, typename... D>
 auto element<TPtr, D...>::ptr() const
 noexcept
 -> ptr_return_type {
-  ptr_return_type p = this->basic_element<TPtr, element::is_async>::ptr();
+  ptr_return_type p = this->basic_element<default_storage_pointer_decorator<TPtr>, element::is_async>::ptr();
   if (!this->is_nil(p)
       && decorators_is_expired_<D...>::apply(*this))
     p = nullptr;
@@ -322,12 +331,12 @@ noexcept
 -> bool {
   if (decorators_is_expired_<D...>::apply(*this))
     return true;
-  return this->basic_element<TPtr, element::is_async>::is_expired();
+  return this->basic_element<default_storage_pointer_decorator<TPtr>, element::is_async>::is_expired();
 }
 
 
-template<typename TPtr, bool Async>
-auto basic_element<TPtr, Async>::is_nil(const ptr_return_type& p)
+template<typename TPtr, typename SPtr, typename VToS, typename SToV, bool Async>
+auto basic_element<storage_pointer_decorator<TPtr, SPtr, VToS, SToV>, Async>::is_nil(const ptr_return_type& p)
 noexcept
 -> bool {
   if constexpr(is_async) {
@@ -338,30 +347,34 @@ noexcept
   }
 }
 
-template<typename TPtr, bool Async>
-basic_element<TPtr, Async>::basic_element(std::shared_ptr<type> init, std::size_t hash) noexcept
+template<typename TPtr, typename SPtr, typename VToS, typename SToV, bool Async>
+basic_element<storage_pointer_decorator<TPtr, SPtr, VToS, SToV>, Async>::basic_element(const storage_spec& spec, pointer init, std::size_t hash) noexcept
 : hash_(hash),
-  ptr_(std::in_place_type<pointer>, std::move(init)),
-  plain_ptr_(std::get<pointer>(ptr_).get())
-{}
+  ptr_(std::in_place_type<std::monostate>),
+  plain_ptr_(init.get()),
+  spec(spec)
+{
+  spec.storage_init_(ptr_, std::move(init));
+}
 
-template<typename TPtr, bool Async>
+template<typename TPtr, typename SPtr, typename VToS, typename SToV, bool Async>
 template<bool Enable>
-basic_element<TPtr, Async>::basic_element(std::enable_if_t<Enable, future_type> init, std::size_t hash) noexcept
+basic_element<storage_pointer_decorator<TPtr, SPtr, VToS, SToV>, Async>::basic_element(const storage_spec& spec, std::enable_if_t<Enable, future_type> init, std::size_t hash) noexcept
 : hash_(hash),
   ptr_(std::in_place_type<async_type>, std::move(init)),
-  plain_ptr_(nullptr)
+  plain_ptr_(nullptr),
+  spec(spec)
 {}
 
-template<typename TPtr, bool Async>
-auto basic_element<TPtr, Async>::hash() const
+template<typename TPtr, typename SPtr, typename VToS, typename SToV, bool Async>
+auto basic_element<storage_pointer_decorator<TPtr, SPtr, VToS, SToV>, Async>::hash() const
 noexcept
 -> std::size_t {
   return hash_;
 }
 
-template<typename TPtr, bool Async>
-auto basic_element<TPtr, Async>::ptr() const
+template<typename TPtr, typename SPtr, typename VToS, typename SToV, bool Async>
+auto basic_element<storage_pointer_decorator<TPtr, SPtr, VToS, SToV>, Async>::ptr() const
 noexcept
 -> ptr_return_type {
   if constexpr(is_async) {
@@ -372,21 +385,21 @@ noexcept
   pointer p = nullptr;
   if (std::holds_alternative<weak_pointer>(ptr_))
     p = std::get<weak_pointer>(ptr_).lock();
-  else if (std::holds_alternative<pointer>(ptr_))
-    p = std::get<pointer>(ptr_);
+  else if (std::holds_alternative<storage_pointer>(ptr_))
+    p = spec.storage_deref_(std::get<storage_pointer>(ptr_));
 
   return p;
 }
 
-template<typename TPtr, bool Async>
-auto basic_element<TPtr, Async>::is_ptr(simple_pointer pp) const
+template<typename TPtr, typename SPtr, typename VToS, typename SToV, bool Async>
+auto basic_element<storage_pointer_decorator<TPtr, SPtr, VToS, SToV>, Async>::is_ptr(simple_pointer pp) const
 noexcept
 -> bool {
   return plain_ptr_ == pp;
 }
 
-template<typename TPtr, bool Async>
-auto basic_element<TPtr, Async>::is_expired() const
+template<typename TPtr, typename SPtr, typename VToS, typename SToV, bool Async>
+auto basic_element<storage_pointer_decorator<TPtr, SPtr, VToS, SToV>, Async>::is_expired() const
 noexcept
 -> bool {
   if constexpr(is_async) {
@@ -396,14 +409,14 @@ noexcept
 
   if (std::holds_alternative<weak_pointer>(ptr_))
     return std::get<weak_pointer>(ptr_).expired();
-  else if (std::holds_alternative<pointer>(ptr_))
-    return std::get<pointer>(ptr_) == nullptr;
+  else if (std::holds_alternative<storage_pointer>(ptr_))
+    return spec.storage_deref_(std::get<storage_pointer>(ptr_)) == nullptr;
   else
     return true;
 }
 
-template<typename TPtr, bool Async>
-auto basic_element<TPtr, Async>::resolve()
+template<typename TPtr, typename SPtr, typename VToS, typename SToV, bool Async>
+auto basic_element<storage_pointer_decorator<TPtr, SPtr, VToS, SToV>, Async>::resolve()
 -> pointer {
   if constexpr(is_async) {
     if (std::holds_alternative<async_type>(ptr_)) {
@@ -423,7 +436,7 @@ auto basic_element<TPtr, Async>::resolve()
       if (std::get<async_type>(ptr_).expired)
         ptr_.template emplace<std::monostate>();
       else if (std::get<async_type>(ptr_).strong)
-        ptr_.template emplace<pointer>(ptr);
+        spec.storage_init_(ptr_, ptr);
       else
         ptr_.template emplace<weak_pointer>(ptr);
       return ptr;
@@ -435,12 +448,12 @@ auto basic_element<TPtr, Async>::resolve()
   }
 }
 
-template<typename TPtr, bool Async>
-auto basic_element<TPtr, Async>::weaken()
+template<typename TPtr, typename SPtr, typename VToS, typename SToV, bool Async>
+auto basic_element<storage_pointer_decorator<TPtr, SPtr, VToS, SToV>, Async>::weaken()
 noexcept
 -> void {
-  if (std::holds_alternative<pointer>(ptr_)) {
-    auto ptr = std::get<pointer>(std::move(ptr_));
+  if (std::holds_alternative<storage_pointer>(ptr_)) {
+    auto ptr = spec.storage_deref_(std::get<storage_pointer>(std::move(ptr_)));
     ptr_.template emplace<weak_pointer>(std::move(ptr));
   } else {
     if constexpr(is_async) {
@@ -450,14 +463,14 @@ noexcept
   }
 }
 
-template<typename TPtr, bool Async>
-auto basic_element<TPtr, Async>::strengthen()
+template<typename TPtr, typename SPtr, typename VToS, typename SToV, bool Async>
+auto basic_element<storage_pointer_decorator<TPtr, SPtr, VToS, SToV>, Async>::strengthen()
 noexcept
 -> bool {
   if (std::holds_alternative<weak_pointer>(ptr_)) {
     auto ptr = std::get<weak_pointer>(ptr_).lock();
     if (ptr != nullptr)
-      ptr_.template emplace<pointer>(std::move(ptr));
+      spec.storage_init_(ptr_, std::move(ptr));
   } else {
     if constexpr(is_async) {
       if (std::holds_alternative<async_type>(ptr_))
@@ -467,8 +480,8 @@ noexcept
   return !std::holds_alternative<weak_pointer>(ptr_);
 }
 
-template<typename TPtr, bool Async>
-auto basic_element<TPtr, Async>::expire()
+template<typename TPtr, typename SPtr, typename VToS, typename SToV, bool Async>
+auto basic_element<storage_pointer_decorator<TPtr, SPtr, VToS, SToV>, Async>::expire()
 noexcept
 -> void {
   if constexpr(is_async) {
@@ -478,7 +491,7 @@ noexcept
     }
   }
 
-  if (std::holds_alternative<weak_pointer>(ptr_) || std::holds_alternative<pointer>(ptr_))
+  if (std::holds_alternative<weak_pointer>(ptr_) || std::holds_alternative<storage_pointer>(ptr_))
     ptr_.template emplace<std::monostate>();
 }
 
