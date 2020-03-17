@@ -409,7 +409,7 @@ class wrapper final
   using store_type = typename Impl::store_type;
 
   template<typename CreateArg>
-  wrapper(const cache_builder<K, typename std::pointer_traits<VPtr>::element_type, Hash, Eq, typename Impl::alloc_t>& b,
+  wrapper(const cache_builder<K, VPtr, Hash, Eq, typename Impl::alloc_t>& b,
       CreateArg&& create,
       typename Impl::alloc_t alloc)
   : extended_cache_intf<K, typename std::pointer_traits<VPtr>::element_type, Hash, Eq, typename Impl::alloc_t, Create>(
@@ -503,7 +503,7 @@ class sharded_wrapper final
   sharded_wrapper& operator=(sharded_wrapper&&) = delete;
 
   template<typename CreateArg>
-  sharded_wrapper(cache_builder<K, typename std::pointer_traits<VPtr>::element_type, Hash, Eq, Alloc> b,
+  sharded_wrapper(cache_builder<K, VPtr, Hash, Eq, Alloc> b,
       unsigned int shards,
       CreateArg&& create,
       Alloc alloc)
@@ -638,10 +638,10 @@ class sharded_wrapper final
 } /* namespace monsoon::cache::builder_detail */
 
 
-template<typename K, typename V, typename Hash, typename Eq, typename Alloc>
+template<typename K, typename VPtr, typename Hash, typename Eq, typename Alloc>
 template<typename Fn>
-auto cache_builder<K, V, Hash, Eq, Alloc>::build(Fn&& fn) const
--> extended_cache<K, V, Hash, Eq, Alloc, std::decay_t<Fn>> {
+auto cache_builder<K, VPtr, Hash, Eq, Alloc>::build(Fn&& fn) const
+-> extended_cache<K, typename std::pointer_traits<VPtr>::element_type, Hash, Eq, Alloc, std::decay_t<Fn>> {
   using namespace builder_detail;
 
   auto alloc = allocator();
@@ -660,10 +660,10 @@ auto cache_builder<K, V, Hash, Eq, Alloc>::build(Fn&& fn) const
                           apply_thread_safe(*this,
                               apply_max_size(*this,
                                   apply_max_mem(*this,
-                                      [this, &fn, shards, &alloc, &mem_tracking](auto decorators) -> std::shared_ptr<extended_cache_intf<K, V, Hash, Eq, Alloc, std::decay_t<Fn>>> {
-                                        using basic_type = typename decltype(decorators)::template cache_type<std::shared_ptr<V>, Alloc>;
-                                        using wrapper_type = wrapper<K, std::shared_ptr<V>, basic_type, Hash, Eq, std::decay_t<Fn>>;
-                                        using sharded_wrapper_type = sharded_wrapper<K, std::shared_ptr<V>, basic_type, Hash, Eq, Alloc, std::decay_t<Fn>>;
+                                      [this, &fn, shards, &alloc, &mem_tracking](auto decorators) -> std::shared_ptr<extended_cache_intf<K, typename std::pointer_traits<VPtr>::element_type, Hash, Eq, Alloc, std::decay_t<Fn>>> {
+                                        using basic_type = typename decltype(decorators)::template cache_type<VPtr, Alloc>;
+                                        using wrapper_type = wrapper<K, VPtr, basic_type, Hash, Eq, std::decay_t<Fn>>;
+                                        using sharded_wrapper_type = sharded_wrapper<K, VPtr, basic_type, Hash, Eq, Alloc, std::decay_t<Fn>>;
 
                                         if (shards > 1u) {
                                           auto impl = std::allocate_shared<sharded_wrapper_type>(
@@ -680,7 +680,7 @@ auto cache_builder<K, V, Hash, Eq, Alloc>::build(Fn&& fn) const
                                         }
                                       }))))))));
 
-  return extended_cache<K, V, Hash, Eq, Alloc, std::decay_t<Fn>>(
+  return extended_cache<K, typename std::pointer_traits<VPtr>::element_type, Hash, Eq, Alloc, std::decay_t<Fn>>(
       builder_impl(cache_decorator_set<>().template add<weaken_decorator>()));
 }
 

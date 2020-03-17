@@ -230,16 +230,16 @@ class cache {
 
   ///\brief Convenience method to create a builder that is compatible with this cache.
   static constexpr auto builder()
-  -> cache_builder<K, V> {
-    return cache_builder<K, V>();
+  -> cache_builder<K, std::shared_ptr<V>> {
+    return cache_builder<K, std::shared_ptr<V>>();
   }
 
   ///\brief Convenience method to create a builder that is compatible with this cache.
   ///\param[in] alloc The allocator used by the cache builder.
   template<typename Alloc>
   static constexpr auto builder(Alloc alloc)
-  -> cache_builder<K, V, std::hash<K>, std::equal_to<K>, Alloc> {
-    return cache_builder<K, V, std::hash<K>, std::equal_to<K>, Alloc>(
+  -> cache_builder<K, std::shared_ptr<V>, std::hash<K>, std::equal_to<K>, Alloc> {
+    return cache_builder<K, std::shared_ptr<V>, std::hash<K>, std::equal_to<K>, Alloc>(
         std::hash<K>(), std::equal_to<K>(), std::move(alloc));
   }
 
@@ -344,7 +344,7 @@ class cache {
 template<typename K, typename V, typename Hash, typename Eq, typename Alloc, typename Create>
 class extended_cache {
   // Cache builder will use private constructor to instantiate cache.
-  template<typename OtherK, typename OtherV, typename OtherHash, typename OtherEq, typename OtherAlloc>
+  template<typename OtherK, typename OtherVPtr, typename OtherHash, typename OtherEq, typename OtherAlloc>
   friend class cache_builder;
 
  private:
@@ -368,14 +368,14 @@ class extended_cache {
 
   ///\copydoc cache::builder()
   static constexpr auto builder()
-  -> cache_builder<K, V, Hash, Eq, Alloc> {
-    return cache_builder<K, V, Hash, Eq, Alloc>();
+  -> cache_builder<K, std::shared_ptr<V>, Hash, Eq, Alloc> {
+    return cache_builder<K, std::shared_ptr<V>, Hash, Eq, Alloc>();
   }
 
   ///\copydoc cache::builder(Alloc)
   static constexpr auto builder(Alloc alloc)
-  -> cache_builder<K, V, Hash, Eq, Alloc> {
-    return cache_builder<K, V, Hash, Eq, Alloc>(
+  -> cache_builder<K, std::shared_ptr<V>, Hash, Eq, Alloc> {
+    return cache_builder<K, std::shared_ptr<V>, Hash, Eq, Alloc>(
         Hash(), Eq(), std::move(alloc));
   }
 

@@ -180,7 +180,7 @@ class cache_builder_vars {
  * \ingroup cache
  * \details Contains all parameters to build a cache.
  * \tparam T The key type of the cache.
- * \tparam U The mapped type of the cache.
+ * \tparam U The mapped pointer type of the cache.
  * \tparam Hash Hash function on the key type.
  *    For details, see \ref cache_builder::with_hash "with_hash()".
  * \tparam Eq Equality predicate on the key type.
@@ -188,16 +188,16 @@ class cache_builder_vars {
  * \tparam Alloc Allocator to use for cache elements.
  *    For details, see \ref cache_builder::with_allocator "with_allocator()".
  */
-template<typename T, typename U,
+template<typename T, typename UPtr,
     typename Hash = std::hash<T>,
     typename Eq = std::equal_to<T>,
-    typename Alloc = std::allocator<U>>
+    typename Alloc = std::allocator<typename std::pointer_traits<UPtr>::element_type>>
 class cache_builder
 : public cache_builder_vars
 {
  public:
   using key_type = T;
-  using mapped_type = U;
+  using mapped_type = typename std::pointer_traits<UPtr>::element_type;
 
   /**
    * \brief Create a cache_builder.
@@ -311,7 +311,7 @@ class cache_builder
    */
   template<typename NewHash>
   constexpr auto with_hash(NewHash hash) const
-  -> cache_builder<T, U, NewHash, Eq, Alloc>;
+  -> cache_builder<T, UPtr, NewHash, Eq, Alloc>;
 
   /**
    * \brief Use the specified equality predicate for the cache.
@@ -331,7 +331,7 @@ class cache_builder
    */
   template<typename NewEq>
   constexpr auto with_equality(NewEq eq) const
-  -> cache_builder<T, U, Hash, NewEq, Alloc>;
+  -> cache_builder<T, UPtr, Hash, NewEq, Alloc>;
 
   /**
    * \brief Use the specified allocator for the cache.
@@ -350,7 +350,7 @@ class cache_builder
    */
   template<typename NewAlloc>
   constexpr auto with_allocator(NewAlloc alloc) const
-  -> cache_builder<T, U, Hash, Eq, NewAlloc>;
+  -> cache_builder<T, UPtr, Hash, Eq, NewAlloc>;
 
   /**
    * \brief Build the cache described by this builder.
@@ -388,7 +388,7 @@ class cache_builder
    */
   template<typename Fn>
   auto build(Fn&& fn) const
-  -> extended_cache<T, U, Hash, Eq, Alloc, std::decay_t<Fn>>;
+  -> extended_cache<T, typename std::pointer_traits<UPtr>::element_type, Hash, Eq, Alloc, std::decay_t<Fn>>;
 
   ///\brief Retrieves the hash function of the cache.
   ///\sa \ref cache_builder::with_hash
@@ -406,15 +406,15 @@ class cache_builder
   Alloc alloc_;
 };
 
-template<typename T, typename U, typename Hash, typename Eq, typename Alloc>
-constexpr cache_builder<T, U, Hash, Eq, Alloc>::cache_builder(Hash hash, Eq eq, Alloc alloc)
+template<typename T, typename UPtr, typename Hash, typename Eq, typename Alloc>
+constexpr cache_builder<T, UPtr, Hash, Eq, Alloc>::cache_builder(Hash hash, Eq eq, Alloc alloc)
 : hash_(std::move(hash)),
   eq_(std::move(eq)),
   alloc_(std::move(alloc))
 {}
 
-template<typename T, typename U, typename Hash, typename Eq, typename Alloc>
-constexpr cache_builder<T, U, Hash, Eq, Alloc>::cache_builder(
+template<typename T, typename UPtr, typename Hash, typename Eq, typename Alloc>
+constexpr cache_builder<T, UPtr, Hash, Eq, Alloc>::cache_builder(
     const cache_builder_vars& other,
     Hash hash, Eq eq, Alloc alloc)
 : cache_builder_vars(other),
@@ -423,40 +423,40 @@ constexpr cache_builder<T, U, Hash, Eq, Alloc>::cache_builder(
   alloc_(std::move(alloc))
 {}
 
-template<typename T, typename U, typename Hash, typename Eq, typename Alloc>
-constexpr auto cache_builder<T, U, Hash, Eq, Alloc>::max_memory(std::uintptr_t v)
+template<typename T, typename UPtr, typename Hash, typename Eq, typename Alloc>
+constexpr auto cache_builder<T, UPtr, Hash, Eq, Alloc>::max_memory(std::uintptr_t v)
 noexcept
 -> cache_builder& {
   max_memory_ = v;
   return *this;
 }
 
-template<typename T, typename U, typename Hash, typename Eq, typename Alloc>
-constexpr auto cache_builder<T, U, Hash, Eq, Alloc>::no_max_memory()
+template<typename T, typename UPtr, typename Hash, typename Eq, typename Alloc>
+constexpr auto cache_builder<T, UPtr, Hash, Eq, Alloc>::no_max_memory()
 noexcept
 -> cache_builder& {
   max_memory_.reset();
   return *this;
 }
 
-template<typename T, typename U, typename Hash, typename Eq, typename Alloc>
-constexpr auto cache_builder<T, U, Hash, Eq, Alloc>::max_size(std::uintptr_t v)
+template<typename T, typename UPtr, typename Hash, typename Eq, typename Alloc>
+constexpr auto cache_builder<T, UPtr, Hash, Eq, Alloc>::max_size(std::uintptr_t v)
 noexcept
 -> cache_builder& {
   max_size_ = v;
   return *this;
 }
 
-template<typename T, typename U, typename Hash, typename Eq, typename Alloc>
-constexpr auto cache_builder<T, U, Hash, Eq, Alloc>::no_max_size()
+template<typename T, typename UPtr, typename Hash, typename Eq, typename Alloc>
+constexpr auto cache_builder<T, UPtr, Hash, Eq, Alloc>::no_max_size()
 noexcept
 -> cache_builder& {
   max_size_.reset();
   return *this;
 }
 
-template<typename T, typename U, typename Hash, typename Eq, typename Alloc>
-constexpr auto cache_builder<T, U, Hash, Eq, Alloc>::max_age(std::chrono::seconds d)
+template<typename T, typename UPtr, typename Hash, typename Eq, typename Alloc>
+constexpr auto cache_builder<T, UPtr, Hash, Eq, Alloc>::max_age(std::chrono::seconds d)
 -> cache_builder& {
   if (d <= std::chrono::seconds::zero())
     throw std::invalid_argument("negative/zero expiry");
@@ -464,16 +464,16 @@ constexpr auto cache_builder<T, U, Hash, Eq, Alloc>::max_age(std::chrono::second
   return *this;
 }
 
-template<typename T, typename U, typename Hash, typename Eq, typename Alloc>
-constexpr auto cache_builder<T, U, Hash, Eq, Alloc>::no_max_age()
+template<typename T, typename UPtr, typename Hash, typename Eq, typename Alloc>
+constexpr auto cache_builder<T, UPtr, Hash, Eq, Alloc>::no_max_age()
 noexcept
 -> cache_builder& {
   max_age_.reset();
   return *this;
 }
 
-template<typename T, typename U, typename Hash, typename Eq, typename Alloc>
-constexpr auto cache_builder<T, U, Hash, Eq, Alloc>::access_expire(std::chrono::seconds d)
+template<typename T, typename UPtr, typename Hash, typename Eq, typename Alloc>
+constexpr auto cache_builder<T, UPtr, Hash, Eq, Alloc>::access_expire(std::chrono::seconds d)
 -> cache_builder& {
   if (d <= std::chrono::seconds::zero())
     throw std::invalid_argument("negative/zero expiry");
@@ -481,16 +481,16 @@ constexpr auto cache_builder<T, U, Hash, Eq, Alloc>::access_expire(std::chrono::
   return *this;
 }
 
-template<typename T, typename U, typename Hash, typename Eq, typename Alloc>
-constexpr auto cache_builder<T, U, Hash, Eq, Alloc>::no_access_expire()
+template<typename T, typename UPtr, typename Hash, typename Eq, typename Alloc>
+constexpr auto cache_builder<T, UPtr, Hash, Eq, Alloc>::no_access_expire()
 noexcept
 -> cache_builder& {
   access_expire_.reset();
   return *this;
 }
 
-template<typename T, typename U, typename Hash, typename Eq, typename Alloc>
-constexpr auto cache_builder<T, U, Hash, Eq, Alloc>::no_expire()
+template<typename T, typename UPtr, typename Hash, typename Eq, typename Alloc>
+constexpr auto cache_builder<T, UPtr, Hash, Eq, Alloc>::no_expire()
 noexcept
 -> cache_builder& {
   return (*this)
@@ -498,40 +498,40 @@ noexcept
       .no_access_expire();
 }
 
-template<typename T, typename U, typename Hash, typename Eq, typename Alloc>
-constexpr auto cache_builder<T, U, Hash, Eq, Alloc>::thread_safe()
+template<typename T, typename UPtr, typename Hash, typename Eq, typename Alloc>
+constexpr auto cache_builder<T, UPtr, Hash, Eq, Alloc>::thread_safe()
 noexcept
 -> cache_builder& {
   thread_safe_ = true;
   return *this;
 }
 
-template<typename T, typename U, typename Hash, typename Eq, typename Alloc>
-constexpr auto cache_builder<T, U, Hash, Eq, Alloc>::not_thread_safe()
+template<typename T, typename UPtr, typename Hash, typename Eq, typename Alloc>
+constexpr auto cache_builder<T, UPtr, Hash, Eq, Alloc>::not_thread_safe()
 noexcept
 -> cache_builder& {
   thread_safe_ = false;
   return *this;
 }
 
-template<typename T, typename U, typename Hash, typename Eq, typename Alloc>
-constexpr auto cache_builder<T, U, Hash, Eq, Alloc>::with_concurrency(unsigned int n)
+template<typename T, typename UPtr, typename Hash, typename Eq, typename Alloc>
+constexpr auto cache_builder<T, UPtr, Hash, Eq, Alloc>::with_concurrency(unsigned int n)
 noexcept
 -> cache_builder& {
   concurrency_ = n;
   return this->thread_safe();
 }
 
-template<typename T, typename U, typename Hash, typename Eq, typename Alloc>
-constexpr auto cache_builder<T, U, Hash, Eq, Alloc>::no_concurrency()
+template<typename T, typename UPtr, typename Hash, typename Eq, typename Alloc>
+constexpr auto cache_builder<T, UPtr, Hash, Eq, Alloc>::no_concurrency()
 noexcept
 -> cache_builder& {
   this->concurrency_ = 1;
   return *this;
 }
 
-template<typename T, typename U, typename Hash, typename Eq, typename Alloc>
-constexpr auto cache_builder<T, U, Hash, Eq, Alloc>::load_factor(float lf)
+template<typename T, typename UPtr, typename Hash, typename Eq, typename Alloc>
+constexpr auto cache_builder<T, UPtr, Hash, Eq, Alloc>::load_factor(float lf)
 -> cache_builder& {
   if (lf <= 0.0 || !std::isfinite(lf))
     throw std::invalid_argument("invalid load factor");
@@ -539,49 +539,49 @@ constexpr auto cache_builder<T, U, Hash, Eq, Alloc>::load_factor(float lf)
   return *this;
 }
 
-template<typename T, typename U, typename Hash, typename Eq, typename Alloc>
-constexpr auto cache_builder<T, U, Hash, Eq, Alloc>::async(bool async)
+template<typename T, typename UPtr, typename Hash, typename Eq, typename Alloc>
+constexpr auto cache_builder<T, UPtr, Hash, Eq, Alloc>::async(bool async)
 noexcept
 -> cache_builder& {
   this->async_ = async;
   return *this;
 }
 
-template<typename T, typename U, typename Hash, typename Eq, typename Alloc>
-auto cache_builder<T, U, Hash, Eq, Alloc>::stats(std::string name, bool tls)
+template<typename T, typename UPtr, typename Hash, typename Eq, typename Alloc>
+auto cache_builder<T, UPtr, Hash, Eq, Alloc>::stats(std::string name, bool tls)
 noexcept
 -> cache_builder& {
   stats_.emplace(std::move(name), tls);
   return *this;
 }
 
-template<typename T, typename U, typename Hash, typename Eq, typename Alloc>
-auto cache_builder<T, U, Hash, Eq, Alloc>::no_stats()
+template<typename T, typename UPtr, typename Hash, typename Eq, typename Alloc>
+auto cache_builder<T, UPtr, Hash, Eq, Alloc>::no_stats()
 noexcept
 -> cache_builder& {
   stats_.reset();
   return *this;
 }
 
-template<typename T, typename U, typename Hash, typename Eq, typename Alloc>
+template<typename T, typename UPtr, typename Hash, typename Eq, typename Alloc>
 template<typename NewHash>
-constexpr auto cache_builder<T, U, Hash, Eq, Alloc>::with_hash(NewHash hash) const
--> cache_builder<T, U, NewHash, Eq, Alloc> {
-  return cache_builder<T, U, NewHash, Eq, Alloc>(*this, hash, eq_, alloc_);
+constexpr auto cache_builder<T, UPtr, Hash, Eq, Alloc>::with_hash(NewHash hash) const
+-> cache_builder<T, UPtr, NewHash, Eq, Alloc> {
+  return cache_builder<T, UPtr, NewHash, Eq, Alloc>(*this, hash, eq_, alloc_);
 }
 
-template<typename T, typename U, typename Hash, typename Eq, typename Alloc>
+template<typename T, typename UPtr, typename Hash, typename Eq, typename Alloc>
 template<typename NewEq>
-constexpr auto cache_builder<T, U, Hash, Eq, Alloc>::with_equality(NewEq eq) const
--> cache_builder<T, U, Hash, NewEq, Alloc> {
-  return cache_builder<T, U, Hash, NewEq, Alloc>(*this, hash_, eq, alloc_);
+constexpr auto cache_builder<T, UPtr, Hash, Eq, Alloc>::with_equality(NewEq eq) const
+-> cache_builder<T, UPtr, Hash, NewEq, Alloc> {
+  return cache_builder<T, UPtr, Hash, NewEq, Alloc>(*this, hash_, eq, alloc_);
 }
 
-template<typename T, typename U, typename Hash, typename Eq, typename Alloc>
+template<typename T, typename UPtr, typename Hash, typename Eq, typename Alloc>
 template<typename NewAlloc>
-constexpr auto cache_builder<T, U, Hash, Eq, Alloc>::with_allocator(NewAlloc alloc) const
--> cache_builder<T, U, Hash, Eq, NewAlloc> {
-  return cache_builder<T, U, Hash, Eq, NewAlloc>(*this, hash_, eq_, alloc);
+constexpr auto cache_builder<T, UPtr, Hash, Eq, Alloc>::with_allocator(NewAlloc alloc) const
+-> cache_builder<T, UPtr, Hash, Eq, NewAlloc> {
+  return cache_builder<T, UPtr, Hash, Eq, NewAlloc>(*this, hash_, eq_, alloc);
 }
 
 constexpr auto cache_builder_vars::max_memory() const
@@ -638,22 +638,22 @@ noexcept
   return stats_;
 }
 
-template<typename T, typename U, typename Hash, typename Eq, typename Alloc>
-constexpr auto cache_builder<T, U, Hash, Eq, Alloc>::hash() const
+template<typename T, typename UPtr, typename Hash, typename Eq, typename Alloc>
+constexpr auto cache_builder<T, UPtr, Hash, Eq, Alloc>::hash() const
 noexcept
 -> Hash {
   return hash_;
 }
 
-template<typename T, typename U, typename Hash, typename Eq, typename Alloc>
-constexpr auto cache_builder<T, U, Hash, Eq, Alloc>::equality() const
+template<typename T, typename UPtr, typename Hash, typename Eq, typename Alloc>
+constexpr auto cache_builder<T, UPtr, Hash, Eq, Alloc>::equality() const
 noexcept
 -> Eq {
   return eq_;
 }
 
-template<typename T, typename U, typename Hash, typename Eq, typename Alloc>
-constexpr auto cache_builder<T, U, Hash, Eq, Alloc>::allocator() const
+template<typename T, typename UPtr, typename Hash, typename Eq, typename Alloc>
+constexpr auto cache_builder<T, UPtr, Hash, Eq, Alloc>::allocator() const
 noexcept
 -> Alloc {
   return alloc_;
