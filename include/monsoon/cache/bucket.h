@@ -22,7 +22,7 @@ class bucket {
   class bucket_link;
 
  public:
-  using store_type = element<T, bucket_link, Decorators...>;
+  using store_type = element<std::shared_ptr<T>, bucket_link, Decorators...>;
   using pointer = typename store_type::pointer;
   using lookup_type = typename store_type::ptr_return_type;
 

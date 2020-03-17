@@ -241,16 +241,16 @@ class basic_element {
  * \tparam Decorators Zero or more decorators to add additional information to
  *    the element.
  */
-template<typename T, typename... Decorators>
+template<typename TPtr, typename... Decorators>
 class element
-: public basic_element<std::shared_ptr<T>, std::disjunction_v<std::is_base_of<async_element_decorator, Decorators>...>>,
+: public basic_element<TPtr, std::disjunction_v<std::is_base_of<async_element_decorator, Decorators>...>>,
   public Decorators...
 {
  public:
-  using type = typename basic_element<std::shared_ptr<T>, std::disjunction_v<std::is_base_of<async_element_decorator, Decorators>...>>::type;
-  using future_type = typename basic_element<std::shared_ptr<T>, std::disjunction_v<std::is_base_of<async_element_decorator, Decorators>...>>::future_type;
-  using ptr_return_type = typename basic_element<std::shared_ptr<T>, std::disjunction_v<std::is_base_of<async_element_decorator, Decorators>...>>::ptr_return_type;
-  using pointer = typename basic_element<std::shared_ptr<T>, std::disjunction_v<std::is_base_of<async_element_decorator, Decorators>...>>::pointer;
+  using type = typename basic_element<TPtr, std::disjunction_v<std::is_base_of<async_element_decorator, Decorators>...>>::type;
+  using future_type = typename basic_element<TPtr, std::disjunction_v<std::is_base_of<async_element_decorator, Decorators>...>>::future_type;
+  using ptr_return_type = typename basic_element<TPtr, std::disjunction_v<std::is_base_of<async_element_decorator, Decorators>...>>::ptr_return_type;
+  using pointer = typename basic_element<TPtr, std::disjunction_v<std::is_base_of<async_element_decorator, Decorators>...>>::pointer;
 
   /**
    * \brief Create an element pointing at the given init pointer.
@@ -287,47 +287,47 @@ class element
 };
 
 
-template<typename T, typename... D>
+template<typename TPtr, typename... D>
 template<typename Alloc, typename... DecoratorCtx>
-element<T, D...>::element(std::allocator_arg_t tag, Alloc alloc,
+element<TPtr, D...>::element(std::allocator_arg_t tag, Alloc alloc,
     std::shared_ptr<type> init, std::size_t hash,
     std::tuple<DecoratorCtx...> decorator_ctx) noexcept
-: basic_element<std::shared_ptr<T>, std::disjunction_v<std::is_base_of<async_element_decorator, D>...>>(std::move(init), hash),
+: basic_element<TPtr, std::disjunction_v<std::is_base_of<async_element_decorator, D>...>>(std::move(init), hash),
   D(tag, alloc, decorator_ctx)...
 {}
 
-template<typename T, typename... D>
+template<typename TPtr, typename... D>
 template<typename Alloc, typename... DecoratorCtx, bool Enable>
-element<T, D...>::element(std::allocator_arg_t tag, Alloc alloc,
+element<TPtr, D...>::element(std::allocator_arg_t tag, Alloc alloc,
     std::enable_if_t<Enable, future_type> init, std::size_t hash,
     std::tuple<DecoratorCtx...> decorator_ctx) noexcept
-: basic_element<std::shared_ptr<T>, std::disjunction_v<std::is_base_of<async_element_decorator, D>...>>(std::move(init), hash),
+: basic_element<TPtr, std::disjunction_v<std::is_base_of<async_element_decorator, D>...>>(std::move(init), hash),
   D(tag, alloc, decorator_ctx)...
 {}
 
-template<typename T, typename... D>
-auto element<T, D...>::ptr() const
+template<typename TPtr, typename... D>
+auto element<TPtr, D...>::ptr() const
 noexcept
 -> ptr_return_type {
-  ptr_return_type p = this->basic_element<std::shared_ptr<T>, element::is_async>::ptr();
+  ptr_return_type p = this->basic_element<TPtr, element::is_async>::ptr();
   if (!this->is_nil(p)
       && decorators_is_expired_<D...>::apply(*this))
     p = nullptr;
   return p;
 }
 
-template<typename T, typename... D>
-auto element<T, D...>::is_expired() const
+template<typename TPtr, typename... D>
+auto element<TPtr, D...>::is_expired() const
 noexcept
 -> bool {
   if (decorators_is_expired_<D...>::apply(*this))
     return true;
-  return this->basic_element<std::shared_ptr<T>, element::is_async>::is_expired();
+  return this->basic_element<TPtr, element::is_async>::is_expired();
 }
 
 
-template<typename T, bool Async>
-auto basic_element<T, Async>::is_nil(const ptr_return_type& p)
+template<typename TPtr, bool Async>
+auto basic_element<TPtr, Async>::is_nil(const ptr_return_type& p)
 noexcept
 -> bool {
   if constexpr(is_async) {
@@ -338,30 +338,30 @@ noexcept
   }
 }
 
-template<typename T, bool Async>
-basic_element<T, Async>::basic_element(std::shared_ptr<type> init, std::size_t hash) noexcept
+template<typename TPtr, bool Async>
+basic_element<TPtr, Async>::basic_element(std::shared_ptr<type> init, std::size_t hash) noexcept
 : hash_(hash),
   ptr_(std::in_place_type<pointer>, std::move(init)),
   plain_ptr_(std::get<pointer>(ptr_).get())
 {}
 
-template<typename T, bool Async>
+template<typename TPtr, bool Async>
 template<bool Enable>
-basic_element<T, Async>::basic_element(std::enable_if_t<Enable, future_type> init, std::size_t hash) noexcept
+basic_element<TPtr, Async>::basic_element(std::enable_if_t<Enable, future_type> init, std::size_t hash) noexcept
 : hash_(hash),
   ptr_(std::in_place_type<async_type>, std::move(init)),
   plain_ptr_(nullptr)
 {}
 
-template<typename T, bool Async>
-auto basic_element<T, Async>::hash() const
+template<typename TPtr, bool Async>
+auto basic_element<TPtr, Async>::hash() const
 noexcept
 -> std::size_t {
   return hash_;
 }
 
-template<typename T, bool Async>
-auto basic_element<T, Async>::ptr() const
+template<typename TPtr, bool Async>
+auto basic_element<TPtr, Async>::ptr() const
 noexcept
 -> ptr_return_type {
   if constexpr(is_async) {
@@ -378,15 +378,15 @@ noexcept
   return p;
 }
 
-template<typename T, bool Async>
-auto basic_element<T, Async>::is_ptr(simple_pointer pp) const
+template<typename TPtr, bool Async>
+auto basic_element<TPtr, Async>::is_ptr(simple_pointer pp) const
 noexcept
 -> bool {
   return plain_ptr_ == pp;
 }
 
-template<typename T, bool Async>
-auto basic_element<T, Async>::is_expired() const
+template<typename TPtr, bool Async>
+auto basic_element<TPtr, Async>::is_expired() const
 noexcept
 -> bool {
   if constexpr(is_async) {
@@ -402,8 +402,8 @@ noexcept
     return true;
 }
 
-template<typename T, bool Async>
-auto basic_element<T, Async>::resolve()
+template<typename TPtr, bool Async>
+auto basic_element<TPtr, Async>::resolve()
 -> pointer {
   if constexpr(is_async) {
     if (std::holds_alternative<async_type>(ptr_)) {
@@ -435,8 +435,8 @@ auto basic_element<T, Async>::resolve()
   }
 }
 
-template<typename T, bool Async>
-auto basic_element<T, Async>::weaken()
+template<typename TPtr, bool Async>
+auto basic_element<TPtr, Async>::weaken()
 noexcept
 -> void {
   if (std::holds_alternative<pointer>(ptr_)) {
@@ -450,8 +450,8 @@ noexcept
   }
 }
 
-template<typename T, bool Async>
-auto basic_element<T, Async>::strengthen()
+template<typename TPtr, bool Async>
+auto basic_element<TPtr, Async>::strengthen()
 noexcept
 -> bool {
   if (std::holds_alternative<weak_pointer>(ptr_)) {
@@ -467,8 +467,8 @@ noexcept
   return !std::holds_alternative<weak_pointer>(ptr_);
 }
 
-template<typename T, bool Async>
-auto basic_element<T, Async>::expire()
+template<typename TPtr, bool Async>
+auto basic_element<TPtr, Async>::expire()
 noexcept
 -> void {
   if constexpr(is_async) {
@@ -490,8 +490,8 @@ namespace std {
 
 ///\brief Specialize uses_allocator to suppress allocator acceptance.
 ///\note Cache implementation explicitly forwards an allocator.
-template<typename T, typename... D, typename Alloc>
-struct uses_allocator<monsoon::cache::element<T, D...>, Alloc>
+template<typename TPtr, typename... D, typename Alloc>
+struct uses_allocator<monsoon::cache::element<TPtr, D...>, Alloc>
 : false_type
 {};
 

@@ -21,8 +21,8 @@ struct weaken_decorator {
   constexpr weaken_decorator([[maybe_unused]] const Builder& b) noexcept
   {}
 
-  template<typename T, typename... D>
-  auto on_create(element<T, D...>& elem) const noexcept
+  template<typename TPtr, typename... D>
+  auto on_create(element<TPtr, D...>& elem) const noexcept
   -> void {
     elem.weaken();
   }
