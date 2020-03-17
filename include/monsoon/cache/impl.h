@@ -89,8 +89,8 @@ struct cache_decorator_set {
   ///\brief Specialize the type of the cache.
   ///\tparam T The mapped type of the cache.
   ///\tparam Alloc The allocator for the cache.
-  template<typename T, typename Alloc>
-  using cache_type = cache_impl<std::shared_ptr<T>, Alloc, D...>;
+  template<typename TPtr, typename Alloc>
+  using cache_type = cache_impl<TPtr, Alloc, D...>;
 
   ///\brief Add type T to the decorator set.
   ///\details Does nothing if T is already part of the decorator set.
@@ -661,7 +661,7 @@ auto cache_builder<K, V, Hash, Eq, Alloc>::build(Fn&& fn) const
                               apply_max_size(*this,
                                   apply_max_mem(*this,
                                       [this, &fn, shards, &alloc, &mem_tracking](auto decorators) -> std::shared_ptr<extended_cache_intf<K, V, Hash, Eq, Alloc, std::decay_t<Fn>>> {
-                                        using basic_type = typename decltype(decorators)::template cache_type<V, Alloc>;
+                                        using basic_type = typename decltype(decorators)::template cache_type<std::shared_ptr<V>, Alloc>;
                                         using wrapper_type = wrapper<K, V, basic_type, Hash, Eq, std::decay_t<Fn>>;
                                         using sharded_wrapper_type = sharded_wrapper<K, V, basic_type, Hash, Eq, Alloc, std::decay_t<Fn>>;
 
