@@ -90,7 +90,7 @@ struct cache_decorator_set {
   ///\tparam T The mapped type of the cache.
   ///\tparam Alloc The allocator for the cache.
   template<typename T, typename Alloc>
-  using cache_type = cache_impl<T, Alloc, D...>;
+  using cache_type = cache_impl<std::shared_ptr<T>, Alloc, D...>;
 
   ///\brief Add type T to the decorator set.
   ///\details Does nothing if T is already part of the decorator set.
