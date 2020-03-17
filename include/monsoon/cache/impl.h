@@ -641,7 +641,7 @@ class sharded_wrapper final
 template<typename K, typename VPtr, typename Hash, typename Eq, typename Alloc>
 template<typename Fn>
 auto cache_builder<K, VPtr, Hash, Eq, Alloc>::build(Fn&& fn) const
--> extended_cache<K, typename std::pointer_traits<VPtr>::element_type, Hash, Eq, Alloc, std::decay_t<Fn>> {
+-> extended_cache<K, typename std::pointer_traits<VPtr>::element_type, Hash, Eq, Alloc, std::decay_t<Fn>, VPtr> {
   using namespace builder_detail;
 
   auto alloc = allocator();
@@ -680,7 +680,7 @@ auto cache_builder<K, VPtr, Hash, Eq, Alloc>::build(Fn&& fn) const
                                         }
                                       }))))))));
 
-  return extended_cache<K, typename std::pointer_traits<VPtr>::element_type, Hash, Eq, Alloc, std::decay_t<Fn>>(
+  return extended_cache<K, typename std::pointer_traits<VPtr>::element_type, Hash, Eq, Alloc, std::decay_t<Fn>, VPtr>(
       builder_impl(cache_decorator_set<>().template add<weaken_decorator>()));
 }
 

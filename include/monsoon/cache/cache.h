@@ -206,21 +206,25 @@ class extended_cache_intf
  * \tparam K The key type of the cache.
  *    If \p K is void, the cache is an identity cache.
  * \tparam V The mapped type of the cache.
+ * \tparam VPtr The mapped pointer type of the cache.
  */
-template<typename K, typename V>
+template<typename K, typename V, typename VPtr = std::shared_ptr<V>>
 class cache {
+  static_assert(std::is_same_v<V, typename std::pointer_traits<VPtr>::element_type>,
+      "V should be the element type of VPtr");
+
   // Extended cache calls our constructor.
-  template<typename OtherK, typename OtherV, typename Hash, typename Eq, typename Alloc, typename Create>
+  template<typename OtherK, typename OtherV, typename Hash, typename Eq, typename Alloc, typename Create, typename OtherVPtr>
   friend class extended_cache;
 
  public:
   ///\brief Key type of the cache.
   ///\details
   ///For identity caches, this is the mapped type of the cache.
-  using key_type = typename cache_intf<K, std::shared_ptr<V>>::key_type;
+  using key_type = typename cache_intf<K, VPtr>::key_type;
   ///\brief Pointer returned by the cache.
   ///\details Shared pointer to the mapped type.
-  using pointer = typename cache_intf<K, std::shared_ptr<V>>::pointer;
+  using pointer = typename cache_intf<K, VPtr>::pointer;
 
   ///\bug Should we enable this, seeing as that cache is copyable?
   ///Current behaviour sends a clear message when you miss initialization,
@@ -230,23 +234,23 @@ class cache {
 
   ///\brief Convenience method to create a builder that is compatible with this cache.
   static constexpr auto builder()
-  -> cache_builder<K, std::shared_ptr<V>> {
-    return cache_builder<K, std::shared_ptr<V>>();
+  -> cache_builder<K, VPtr> {
+    return cache_builder<K, VPtr>();
   }
 
   ///\brief Convenience method to create a builder that is compatible with this cache.
   ///\param[in] alloc The allocator used by the cache builder.
   template<typename Alloc>
   static constexpr auto builder(Alloc alloc)
-  -> cache_builder<K, std::shared_ptr<V>, std::hash<K>, std::equal_to<K>, Alloc> {
-    return cache_builder<K, std::shared_ptr<V>, std::hash<K>, std::equal_to<K>, Alloc>(
+  -> cache_builder<K, VPtr, std::hash<K>, std::equal_to<K>, Alloc> {
+    return cache_builder<K, VPtr, std::hash<K>, std::equal_to<K>, Alloc>(
         std::hash<K>(), std::equal_to<K>(), std::move(alloc));
   }
 
  private:
   ///\brief Constructor used by cache builder to initialize the cache.
   ///\param[in] impl A pointer to the implementation of the cache.
-  explicit cache(std::shared_ptr<cache_intf<K, std::shared_ptr<V>>>&& impl) noexcept
+  explicit cache(std::shared_ptr<cache_intf<K, VPtr>>&& impl) noexcept
   : impl_(std::move(impl))
   {}
 
@@ -320,7 +324,7 @@ class cache {
 
  private:
   ///\brief Pointer to the implementation.
-  std::shared_ptr<cache_intf<K, std::shared_ptr<V>>> impl_;
+  std::shared_ptr<cache_intf<K, VPtr>> impl_;
 };
 
 /**
@@ -341,14 +345,14 @@ class cache {
  * \tparam Alloc Allocator used by the cache.
  * \tparam Create Mapped type construction function.
  */
-template<typename K, typename V, typename Hash, typename Eq, typename Alloc, typename Create>
+template<typename K, typename V, typename Hash, typename Eq, typename Alloc, typename Create, typename VPtr>
 class extended_cache {
   // Cache builder will use private constructor to instantiate cache.
   template<typename OtherK, typename OtherVPtr, typename OtherHash, typename OtherEq, typename OtherAlloc>
   friend class cache_builder;
 
  private:
-  using extended_cache_type = extended_cache_intf<K, std::shared_ptr<V>, Hash, Eq, Alloc, Create>;
+  using extended_cache_type = extended_cache_intf<K, VPtr, Hash, Eq, Alloc, Create>;
   using extended_query_type = typename extended_cache_type::extended_query_type;
 
  public:
@@ -368,19 +372,19 @@ class extended_cache {
 
   ///\copydoc cache::builder()
   static constexpr auto builder()
-  -> cache_builder<K, std::shared_ptr<V>, Hash, Eq, Alloc> {
-    return cache_builder<K, std::shared_ptr<V>, Hash, Eq, Alloc>();
+  -> cache_builder<K, VPtr, Hash, Eq, Alloc> {
+    return cache_builder<K, VPtr, Hash, Eq, Alloc>();
   }
 
   ///\copydoc cache::builder(Alloc)
   static constexpr auto builder(Alloc alloc)
-  -> cache_builder<K, std::shared_ptr<V>, Hash, Eq, Alloc> {
-    return cache_builder<K, std::shared_ptr<V>, Hash, Eq, Alloc>(
+  -> cache_builder<K, VPtr, Hash, Eq, Alloc> {
+    return cache_builder<K, VPtr, Hash, Eq, Alloc>(
         Hash(), Eq(), std::move(alloc));
   }
 
  private:
-  ///\copydoc cache::cache(std::shared_ptr<cache_intf<K, std::shared_ptr<V>>>&&)
+  ///\copydoc cache::cache(std::shared_ptr<cache_intf<K, V, VPtr>>&&)
   extended_cache(std::shared_ptr<extended_cache_type>&& impl) noexcept
   : impl_(std::move(impl))
   {}

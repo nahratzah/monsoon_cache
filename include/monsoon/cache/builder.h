@@ -15,7 +15,7 @@
 namespace monsoon::cache {
 
 
-template<typename T, typename U, typename Hash, typename Eq, typename Alloc, typename Create>
+template<typename T, typename U, typename Hash, typename Eq, typename Alloc, typename Create, typename VPtr = std::shared_ptr<U>>
 class extended_cache;
 
 struct stats_vars {
@@ -388,7 +388,7 @@ class cache_builder
    */
   template<typename Fn>
   auto build(Fn&& fn) const
-  -> extended_cache<T, typename std::pointer_traits<UPtr>::element_type, Hash, Eq, Alloc, std::decay_t<Fn>>;
+  -> extended_cache<T, typename std::pointer_traits<UPtr>::element_type, Hash, Eq, Alloc, std::decay_t<Fn>, UPtr>;
 
   ///\brief Retrieves the hash function of the cache.
   ///\sa \ref cache_builder::with_hash
