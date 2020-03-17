@@ -83,14 +83,14 @@ struct async_element_decorator {
  * \tparam T The type of element held.
  * \tparam Async If true, indicates that the basic_element may hold futures.
  */
-template<typename T, bool Async>
+template<typename TPtr, bool Async>
 class basic_element {
  public:
-  using type = T;
-  using pointer = std::shared_ptr<type>;
+  using type = typename std::pointer_traits<TPtr>::element_type;
+  using pointer = typename std::pointer_traits<TPtr>::pointer;
   using simple_pointer = std::add_pointer_t<type>;
-  using const_reference = std::add_lvalue_reference_t<std::add_const_t<T>>;
-  using weak_pointer = std::weak_ptr<type>;
+  using const_reference = std::add_lvalue_reference_t<std::add_const_t<type>>;
+  using weak_pointer = typename pointer::weak_type;
   static constexpr bool is_async = Async;
   using future_type = std::conditional_t<is_async,
       std::shared_future<pointer>,
@@ -243,14 +243,14 @@ class basic_element {
  */
 template<typename T, typename... Decorators>
 class element
-: public basic_element<T, std::disjunction_v<std::is_base_of<async_element_decorator, Decorators>...>>,
+: public basic_element<std::shared_ptr<T>, std::disjunction_v<std::is_base_of<async_element_decorator, Decorators>...>>,
   public Decorators...
 {
  public:
-  using type = typename basic_element<T, std::disjunction_v<std::is_base_of<async_element_decorator, Decorators>...>>::type;
-  using future_type = typename basic_element<T, std::disjunction_v<std::is_base_of<async_element_decorator, Decorators>...>>::future_type;
-  using ptr_return_type = typename basic_element<T, std::disjunction_v<std::is_base_of<async_element_decorator, Decorators>...>>::ptr_return_type;
-  using pointer = typename basic_element<T, std::disjunction_v<std::is_base_of<async_element_decorator, Decorators>...>>::pointer;
+  using type = typename basic_element<std::shared_ptr<T>, std::disjunction_v<std::is_base_of<async_element_decorator, Decorators>...>>::type;
+  using future_type = typename basic_element<std::shared_ptr<T>, std::disjunction_v<std::is_base_of<async_element_decorator, Decorators>...>>::future_type;
+  using ptr_return_type = typename basic_element<std::shared_ptr<T>, std::disjunction_v<std::is_base_of<async_element_decorator, Decorators>...>>::ptr_return_type;
+  using pointer = typename basic_element<std::shared_ptr<T>, std::disjunction_v<std::is_base_of<async_element_decorator, Decorators>...>>::pointer;
 
   /**
    * \brief Create an element pointing at the given init pointer.
@@ -292,7 +292,7 @@ template<typename Alloc, typename... DecoratorCtx>
 element<T, D...>::element(std::allocator_arg_t tag, Alloc alloc,
     std::shared_ptr<type> init, std::size_t hash,
     std::tuple<DecoratorCtx...> decorator_ctx) noexcept
-: basic_element<T, std::disjunction_v<std::is_base_of<async_element_decorator, D>...>>(std::move(init), hash),
+: basic_element<std::shared_ptr<T>, std::disjunction_v<std::is_base_of<async_element_decorator, D>...>>(std::move(init), hash),
   D(tag, alloc, decorator_ctx)...
 {}
 
@@ -301,7 +301,7 @@ template<typename Alloc, typename... DecoratorCtx, bool Enable>
 element<T, D...>::element(std::allocator_arg_t tag, Alloc alloc,
     std::enable_if_t<Enable, future_type> init, std::size_t hash,
     std::tuple<DecoratorCtx...> decorator_ctx) noexcept
-: basic_element<T, std::disjunction_v<std::is_base_of<async_element_decorator, D>...>>(std::move(init), hash),
+: basic_element<std::shared_ptr<T>, std::disjunction_v<std::is_base_of<async_element_decorator, D>...>>(std::move(init), hash),
   D(tag, alloc, decorator_ctx)...
 {}
 
@@ -309,7 +309,7 @@ template<typename T, typename... D>
 auto element<T, D...>::ptr() const
 noexcept
 -> ptr_return_type {
-  ptr_return_type p = this->basic_element<T, element::is_async>::ptr();
+  ptr_return_type p = this->basic_element<std::shared_ptr<T>, element::is_async>::ptr();
   if (!this->is_nil(p)
       && decorators_is_expired_<D...>::apply(*this))
     p = nullptr;
@@ -322,7 +322,7 @@ noexcept
 -> bool {
   if (decorators_is_expired_<D...>::apply(*this))
     return true;
-  return this->basic_element<T, element::is_async>::is_expired();
+  return this->basic_element<std::shared_ptr<T>, element::is_async>::is_expired();
 }
 
 
