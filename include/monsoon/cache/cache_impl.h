@@ -238,7 +238,7 @@ class cache_impl
 
  private:
   ///\brief Implementation type of the bucket.
-  using bucket_type = decorate_bucket_t<bucket<T>, select_decorator_type<CacheDecorators, cache_impl>...>;
+  using bucket_type = decorate_bucket_t<bucket<std::shared_ptr<T>>, select_decorator_type<CacheDecorators, cache_impl>...>;
   ///\brief Vector of buckets.
   using bucket_vector = std::vector<bucket_type, typename std::allocator_traits<Alloc>::template rebind_alloc<bucket_type>>;
   ///\brief Result type of bucket::lookup_or_create and bucket::lookup_if_present

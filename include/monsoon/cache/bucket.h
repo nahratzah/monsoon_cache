@@ -16,13 +16,13 @@ namespace monsoon::cache {
  * \ingroup cache_detail
  * \details A bucket contains all objects, based on a given modulo of the hash code.
  */
-template<typename T, typename... Decorators>
+template<typename TPtr, typename... Decorators>
 class bucket {
  private:
   class bucket_link;
 
  public:
-  using store_type = element<std::shared_ptr<T>, bucket_link, Decorators...>;
+  using store_type = element<TPtr, bucket_link, Decorators...>;
   using pointer = typename store_type::pointer;
   using lookup_type = typename store_type::ptr_return_type;
 
@@ -306,8 +306,8 @@ class bucket {
  * \brief Element decorator used by bucket to maintain its chain of elements.
  * \ingroup cache_detail
  */
-template<typename T, typename... Decorators>
-class bucket<T, Decorators...>::bucket_link {
+template<typename TPtr, typename... Decorators>
+class bucket<TPtr, Decorators...>::bucket_link {
   template<typename, typename...> friend class bucket;
 
  public:
