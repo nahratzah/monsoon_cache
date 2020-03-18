@@ -1049,7 +1049,7 @@ struct storage_override_var_impl
   template<typename OtherStoragePtr, typename OtherStoragePtrCArgs, typename OtherStoragePtrDeref>
   auto storage_override(OtherStoragePtrCArgs&& cargs, OtherStoragePtrDeref&& deref) const -> builder_rewrite_t<Builder, storage_override_var<StoragePtr, StoragePtrCArgs, StoragePtrDeref>, storage_override_var<OtherStoragePtr, std::decay_t<OtherStoragePtrCArgs>, std::decay_t<OtherStoragePtrDeref>>> {
     return builder_rewrite_t<Builder, storage_override_var<StoragePtr, StoragePtrCArgs, StoragePtrDeref>, storage_override_var<OtherStoragePtr, std::decay_t<OtherStoragePtrCArgs>, std::decay_t<OtherStoragePtrDeref>>>(
-        *this,
+        static_cast<const Builder&>(*this),
         storage_override_var<OtherStoragePtr, std::decay_t<OtherStoragePtrCArgs>, std::decay_t<OtherStoragePtrDeref>>(
             std::forward<OtherStoragePtrCArgs>(cargs),
             std::forward<OtherStoragePtrDeref>(deref)));
