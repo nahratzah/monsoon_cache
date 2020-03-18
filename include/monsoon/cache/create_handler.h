@@ -106,6 +106,8 @@ auto future_as_pointer_future_(Alloc&& alloc, std::shared_future<T> fut)
 }} /* namespace monsoon::cache::<unnamed>::create_ops */
 
 
+template<typename Fn, typename TPtr, bool Async> class create_handler;
+
 /**
  * \brief Wraps create function so it emits the proper type.
  * \ingroup cache_detail
@@ -121,12 +123,12 @@ auto future_as_pointer_future_(Alloc&& alloc, std::shared_future<T> fut)
  * \tparam Async If set, a future to shared pointer will be returned.
  *    Otherwise, a shared pointer will be returned.
  */
-template<typename Fn, bool Async>
-class create_handler {
+template<typename Fn, typename T>
+class create_handler<Fn, std::shared_ptr<T>, false> {
  public:
   create_handler(Fn&& fn)
   noexcept(std::is_nothrow_move_constructible_v<Fn>)
-  : fn_(fn)
+  : fn_(std::move(fn))
   {}
 
   create_handler(const Fn& fn)
@@ -166,12 +168,12 @@ class create_handler {
  * \tparam Async If set, a future to shared pointer will be returned.
  *    Otherwise, a shared pointer will be returned.
  */
-template<typename Fn>
-class create_handler<Fn, true> { // Async case.
+template<typename Fn, typename T>
+class create_handler<Fn, std::shared_ptr<T>, true> { // Async case.
  public:
   create_handler(Fn&& fn)
   noexcept(std::is_nothrow_move_constructible_v<Fn>)
-  : fn_(fn)
+  : fn_(std::move(fn))
   {}
 
   create_handler(const Fn& fn)
@@ -203,10 +205,74 @@ class create_handler<Fn, true> { // Async case.
   Fn fn_;
 };
 
+template<typename Fn, typename VPtr>
+class create_handler<Fn, VPtr, false> {
+ public:
+  create_handler(Fn&& fn)
+  noexcept(std::is_nothrow_move_constructible_v<Fn>)
+  : fn_(std::move(fn))
+  {}
+
+  create_handler(const Fn& fn)
+  noexcept(std::is_nothrow_copy_constructible_v<Fn>)
+  : fn_(fn)
+  {}
+
+  template<typename Alloc, typename... Args>
+  auto operator()(Alloc alloc, Args&&... args) const
+  -> VPtr {
+    using namespace create_ops;
+
+    using raw_result_type = decltype(fn_(alloc, std::forward<Args>(args)...));
+    if constexpr(is_future_v<raw_result_type>) {
+      return fn_(alloc, std::forward<Args>(args)...).get();
+    } else {
+      return fn_(alloc, std::forward<Args>(args)...);
+    }
+  }
+
+ private:
+  Fn fn_;
+};
+
+template<typename Fn, typename VPtr>
+class create_handler<Fn, VPtr, true> {
+ public:
+  create_handler(Fn&& fn)
+  noexcept(std::is_nothrow_move_constructible_v<Fn>)
+  : fn_(std::move(fn))
+  {}
+
+  create_handler(const Fn& fn)
+  noexcept(std::is_nothrow_copy_constructible_v<Fn>)
+  : fn_(fn)
+  {}
+
+  template<typename Alloc, typename... Args>
+  auto operator()(Alloc alloc, Args&&... args) const
+  -> std::shared_future<VPtr> {
+    using namespace create_ops;
+
+    using raw_result_type = decltype(fn_(alloc, std::forward<Args>(args)...));
+    if constexpr(is_future_v<raw_result_type>) {
+      return fn_(alloc, std::forward<Args>(args)...);
+    } else {
+      return std::async(
+          std::launch::deferred,
+          fn_,
+          std::move(alloc),
+          std::forward<Args>(args)...);
+    }
+  }
+
+ private:
+  Fn fn_;
+};
+
 ///\brief Returns a create handler for the given create function.
-template<bool Async, typename Fn>
+template<bool Async, typename TPtr, typename Fn>
 auto make_create_handler(Fn&& fn)
--> create_handler<std::decay_t<Fn>, Async> {
+-> create_handler<std::decay_t<Fn>, TPtr, Async> {
   return std::forward<Fn>(fn);
 }
 

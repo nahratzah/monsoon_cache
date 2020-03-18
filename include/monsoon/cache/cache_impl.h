@@ -780,7 +780,7 @@ template<typename CacheQuery>
 auto cache_impl<A, D...>::create_fn<CacheQuery>::operator()(void* hint)
 -> store_type* {
   // Wrap create in a handler that fixes the return type.
-  auto ch = make_create_handler<store_type::is_async>(q.create);
+  auto ch = make_create_handler<store_type::is_async, pointer>(q.create);
   alloc_type alloc = owner.alloc_;
 
   // Allocate storage.
