@@ -27,6 +27,9 @@ class storage_pointer_variant_emplace_ {
   }
 };
 
+template<typename VPtr, typename StoragePtr, typename VPtrToStoragePtrFn, typename StoragePtrToVPtrFn>
+struct storage_pointer_element_decorator;
+
 /**
  * \brief Allow overriding how element internally stores pointers.
  */
@@ -42,6 +45,8 @@ struct storage_pointer_decorator {
     private StoragePtrToVPtrFn
   {
    public:
+    using element_decorator_type = storage_pointer_element_decorator<VPtr, StoragePtr, VPtrToStoragePtrFn, StoragePtrToVPtrFn>;
+
     spec() {} // XXX delete
     template<typename Builder> spec(const Builder& b) {} // XXX implement
 
@@ -60,6 +65,23 @@ struct storage_pointer_decorator {
 
   template<typename CacheImpl>
   using for_impl_type = spec;
+};
+
+
+template<typename VPtr, typename StoragePtr, typename VPtrToStoragePtrFn, typename StoragePtrToVPtrFn>
+struct storage_pointer_element_decorator {
+  using element_type         = typename storage_pointer_decorator<VPtr, StoragePtr, VPtrToStoragePtrFn, StoragePtrToVPtrFn>::element_type;
+  using pointer_type         = typename storage_pointer_decorator<VPtr, StoragePtr, VPtrToStoragePtrFn, StoragePtrToVPtrFn>::pointer_type;
+  using weak_type            = typename storage_pointer_decorator<VPtr, StoragePtr, VPtrToStoragePtrFn, StoragePtrToVPtrFn>::weak_type;
+  using storage_pointer_type = typename storage_pointer_decorator<VPtr, StoragePtr, VPtrToStoragePtrFn, StoragePtrToVPtrFn>::storage_pointer_type;
+  using spec                 = typename storage_pointer_decorator<VPtr, StoragePtr, VPtrToStoragePtrFn, StoragePtrToVPtrFn>::spec;
+
+  template<typename Alloc, typename... Types>
+  constexpr storage_pointer_element_decorator(
+      [[maybe_unused]] std::allocator_arg_t tag,
+      [[maybe_unused]] Alloc a,
+      [[maybe_unused]] const std::tuple<Types...>& init) noexcept
+  {}
 };
 
 

@@ -84,6 +84,7 @@ template<bool Enabled> class thread_safe_var;
 class concurrency_var;
 template<bool Enabled> class async_var;
 template<bool Enabled> class stats_var;
+template<typename StoragePtr, typename StoragePtrCArgs, typename StoragePtrDeref> class storage_override_var;
 template<typename Hash> class hash_var;
 template<typename Eq> class equality_var;
 template<typename Alloc> class allocator_var;
@@ -105,7 +106,7 @@ struct is_bool_var_ {
   static void accept_(const Var<B>*);
 };
 
-template<template<typename> class Var>
+template<template<typename...> class Var>
 struct is_type_var_ {
   template<typename T, typename = void>
   struct matcher
@@ -117,14 +118,14 @@ struct is_type_var_ {
   : std::true_type
   {};
 
-  template<typename T>
-  static void accept_(const Var<T>*);
+  template<typename... T>
+  static void accept_(const Var<T...>*);
 };
 
 template<template<bool> class Var, typename T>
 constexpr bool is_bool_var = is_bool_var_<Var>::template matcher<T>::value;
 
-template<template<typename> class Var, typename T>
+template<template<typename...> class Var, typename T>
 constexpr bool is_type_var = is_type_var_<Var>::template matcher<T>::value;
 
 
@@ -966,6 +967,99 @@ struct stats_var_impl
 };
 
 
+template<typename StoragePtr, typename StoragePtrCArgs, typename StoragePtrDeref, typename Builder> struct storage_override_var_impl;
+
+template<typename StoragePtr, typename StoragePtrCArgs, typename StoragePtrDeref>
+class storage_override_var {
+  template<typename, typename, typename, typename> friend struct storage_override_var_impl;
+
+  public:
+  template<typename Builder>
+  using impl = storage_override_var_impl<StoragePtr, StoragePtrCArgs, StoragePtrDeref, Builder>;
+
+  static_assert(!std::is_void_v<StoragePtr> && !std::is_void_v<StoragePtrCArgs> && !std::is_void_v<StoragePtrDeref>);
+
+  using storage_pointer           = StoragePtr;
+  using storage_pointer_ctor_args = StoragePtrCArgs;
+  using storage_pointer_deref     = StoragePtrDeref;
+
+  storage_override_var(storage_pointer_ctor_args ctor_args, storage_pointer_deref deref)
+      noexcept(std::is_nothrow_move_constructible_v<storage_pointer_ctor_args>
+          && std::is_nothrow_move_constructible_v<storage_pointer_deref>)
+  : ctor_args_(std::move(ctor_args)),
+    deref_(std::move(deref))
+  {}
+
+  auto storage_override_cargs_fn() const noexcept -> const storage_pointer_ctor_args& {
+    return ctor_args_;
+  };
+
+  auto storage_override_deref_fn() const noexcept -> const storage_pointer_deref& {
+    return deref_;
+  };
+
+  protected:
+  ~storage_override_var() noexcept = default;
+
+  private:
+  storage_pointer_ctor_args ctor_args_;
+  storage_pointer_deref     deref_;
+};
+
+template<>
+class storage_override_var<void, void, void> {
+  template<typename, typename, typename, typename> friend struct storage_override_var_impl;
+
+  public:
+  template<typename Builder>
+  using impl = storage_override_var_impl<void, void, void, Builder>;
+
+  using storage_pointer           = void;
+  using storage_pointer_ctor_args = void;
+  using storage_pointer_deref     = void;
+
+  constexpr storage_override_var() noexcept = default;
+
+  protected:
+  ~storage_override_var() noexcept = default;
+};
+
+template<typename StoragePtr, typename StoragePtrCArgs, typename StoragePtrDeref, typename Builder>
+struct storage_override_var_impl
+: public storage_override_var<StoragePtr, StoragePtrCArgs, StoragePtrDeref>
+{
+  constexpr storage_override_var_impl() noexcept = default;
+
+  template<typename OtherBuilder>
+  constexpr storage_override_var_impl([[maybe_unused]] const OtherBuilder& b, storage_override_var<StoragePtr, StoragePtrCArgs, StoragePtrDeref>&& var) noexcept
+  : storage_override_var<StoragePtr, StoragePtrCArgs, StoragePtrDeref>(std::move(var))
+  {}
+
+  template<typename Var, typename = std::enable_if_t<!is_type_var<storage_override_var, std::decay_t<Var>>>>
+  constexpr storage_override_var_impl(const storage_override_var<StoragePtr, StoragePtrCArgs, StoragePtrDeref>& b, Var&& var) noexcept
+  : storage_override_var<StoragePtr, StoragePtrCArgs, StoragePtrDeref>(b)
+  {}
+
+  constexpr auto no_storage_override() const noexcept -> builder_rewrite_t<Builder, storage_override_var<StoragePtr, StoragePtrCArgs, StoragePtrDeref>, storage_override_var<void, void, void>> {
+    return builder_rewrite_t<Builder, storage_override_var<StoragePtr, StoragePtrCArgs, StoragePtrDeref>, storage_override_var<void, void, void>>(
+        static_cast<const Builder&>(*this),
+        storage_override_var<void, void, void>());
+  }
+
+  template<typename OtherStoragePtr, typename OtherStoragePtrCArgs, typename OtherStoragePtrDeref>
+  auto storage_override(OtherStoragePtrCArgs&& cargs, OtherStoragePtrDeref&& deref) const -> builder_rewrite_t<Builder, storage_override_var<StoragePtr, StoragePtrCArgs, StoragePtrDeref>, storage_override_var<OtherStoragePtr, std::decay_t<OtherStoragePtrCArgs>, std::decay_t<OtherStoragePtrDeref>>> {
+    return builder_rewrite_t<Builder, storage_override_var<StoragePtr, StoragePtrCArgs, StoragePtrDeref>, storage_override_var<OtherStoragePtr, std::decay_t<OtherStoragePtrCArgs>, std::decay_t<OtherStoragePtrDeref>>>(
+        *this,
+        storage_override_var<OtherStoragePtr, std::decay_t<OtherStoragePtrCArgs>, std::decay_t<OtherStoragePtrDeref>>(
+            std::forward<OtherStoragePtrCArgs>(cargs),
+            std::forward<OtherStoragePtrDeref>(deref)));
+  }
+
+  protected:
+  ~storage_override_var_impl() noexcept = default;
+};
+
+
 template<typename Hash, typename Builder>
 struct hash_var_impl
 : public hash_var<Hash>
@@ -1094,7 +1188,7 @@ template<typename Alloc, typename Builder>
 struct allocator_var_impl
 : public allocator_var<Alloc>
 {
-  constexpr allocator_var_impl() noexcept = default;
+  constexpr allocator_var_impl() noexcept(std::is_nothrow_default_constructible_v<Alloc>) = default;
 
   template<typename OtherBuilder>
   constexpr allocator_var_impl([[maybe_unused]] const OtherBuilder& b, allocator_var<Alloc>&& var) noexcept
@@ -1236,6 +1330,7 @@ using cache_builder = builder_vars_::builder_impl<
     builder_vars_::load_factor_var,
     builder_vars_::async_var<false>,
     builder_vars_::stats_var<false>,
+    builder_vars_::storage_override_var<void, void, void>,
     builder_vars_::hash_var<Hash>,
     builder_vars_::equality_var<Eq>,
     builder_vars_::allocator_var<Alloc>

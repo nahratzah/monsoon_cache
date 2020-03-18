@@ -18,6 +18,7 @@
 #include <monsoon/cache/stats.h>
 #include <monsoon/cache/thread_safe_decorator.h>
 #include <monsoon/cache/weaken_decorator.h>
+#include <monsoon/cache/element.h>
 #include <instrumentation/gauge.h>
 #include <instrumentation/engine.h>
 #include <instrumentation/path.h>
@@ -118,10 +119,9 @@ struct remove_all_<CDS, decorator_list<T0, T...>>
 template<typename... D>
 struct cache_decorator_set {
   ///\brief Specialize the type of the cache.
-  ///\tparam T The mapped type of the cache.
   ///\tparam Alloc The allocator for the cache.
-  template<typename TPtr, typename Alloc>
-  using cache_type = cache_impl<TPtr, Alloc, D...>;
+  template<typename Alloc>
+  using cache_type = cache_impl<Alloc, D...>;
 
   ///\brief Add type T to the decorator set.
   ///\details Does nothing if T is already part of the decorator set, or void.
@@ -349,6 +349,39 @@ struct apply_max_mem_<Builder, std::enable_if_t<std::is_base_of_v<builder_vars_:
 ///\brief Max-memory decorator selection.
 template<typename Builder>
 using apply_max_mem_t = apply_max_mem_<Builder>;
+
+
+template<typename Builder>
+struct storage_override_selector_ {
+  private:
+  template<typename StoragePtr, typename StoragePtrCArgs, typename StoragePtrDeref>
+  static auto op_(const builder_vars_::storage_override_var<StoragePtr, StoragePtrCArgs, StoragePtrDeref>&) -> builder_vars_::storage_override_var<StoragePtr, StoragePtrCArgs, StoragePtrDeref>;
+
+  public:
+  using type = decltype(op_(std::declval<const Builder&>()));
+};
+
+template<typename T, typename VPtr, typename StoragePtr = typename T::storage_pointer, typename StoragePtrCArgs = typename T::storage_pointer_ctor_args, typename StoragePtrDeref = typename T::storage_pointer_deref>
+struct make_storage_override_decorator_ {
+  using type = storage_pointer_decorator<VPtr, StoragePtr, StoragePtrCArgs, StoragePtrDeref>;
+};
+
+template<typename T, typename VPtr>
+struct make_storage_override_decorator_<T, VPtr, void, void, void> {
+  using type = default_storage_pointer_decorator<VPtr>;
+};
+
+template<typename Builder, typename = void> struct apply_storage_override_;
+
+template<typename Builder>
+struct apply_storage_override_<Builder, std::void_t<typename storage_override_selector_<Builder>::type>> {
+  using var = typename storage_override_selector_<Builder>::type;
+  using add = decorator_list<typename make_storage_override_decorator_<var, typename Builder::pointer>::type>;
+  using remove = decorator_list<>;
+};
+
+template<typename Builder>
+using apply_storage_override_t = apply_storage_override_<Builder>;
 
 
 ///\brief Weaken decorator.
@@ -713,8 +746,9 @@ auto builder_impl<Vars...>::build(Fn&& fn) const
       apply_key_type_t<builder_impl>,
       apply_thread_safe_t<builder_impl>,
       apply_max_size_t<builder_impl>,
-      apply_max_mem_t<builder_impl>>;
-  using basic_type = typename decorator_set::template cache_type<typename builder_impl::pointer, typename builder_impl::allocator_type>;
+      apply_max_mem_t<builder_impl>,
+      apply_storage_override_t<builder_impl>>;
+  using basic_type = typename decorator_set::template cache_type<typename builder_impl::allocator_type>;
   using wrapper_type = wrapper<
       typename builder_impl::key_or_void_type,
       typename builder_impl::pointer,

@@ -222,15 +222,14 @@ using select_decorator_type = typename select_decorator_type_<D, ImplType>::type
  * cache_impl >> wrapper [ label="return value" ] ;
  * \endmsc
  *
- * \tparam T The type of elements in the cache.
  * \tparam Alloc The allocator used for the cache data and elements.
  * \tparam CacheDecorators Decorators that affect the behaviour of the cache.
  */
-template<typename TPtr, typename Alloc, typename... CacheDecorators>
+template<typename Alloc, typename... CacheDecorators>
 class cache_impl
-: public select_decorator_type<CacheDecorators, cache_impl<TPtr, Alloc, CacheDecorators...>>...
+: public select_decorator_type<CacheDecorators, cache_impl<Alloc, CacheDecorators...>>...
 {
-  template<typename, typename...> friend class bucket;
+  template<typename...> friend class bucket;
 
  public:
   ///\brief Size type of the cache.
@@ -238,7 +237,7 @@ class cache_impl
 
  private:
   ///\brief Implementation type of the bucket.
-  using bucket_type = decorate_bucket_t<bucket<TPtr>, select_decorator_type<CacheDecorators, cache_impl>...>;
+  using bucket_type = decorate_bucket_t<bucket<>, select_decorator_type<CacheDecorators, cache_impl>...>;
   ///\brief Vector of buckets.
   using bucket_vector = std::vector<bucket_type, typename std::allocator_traits<Alloc>::template rebind_alloc<bucket_type>>;
   ///\brief Result type of bucket::lookup_or_create and bucket::lookup_if_present
@@ -392,9 +391,9 @@ class cache_impl
 };
 
 
-template<typename TPtr, typename Alloc, typename... CacheDecorators>
+template<typename Alloc, typename... CacheDecorators>
 template<typename CacheQuery>
-class cache_impl<TPtr, Alloc, CacheDecorators...>::create_fn {
+class cache_impl<Alloc, CacheDecorators...>::create_fn {
  public:
   ///Rebind allocator traits to store_type.
   using alloc_traits = typename std::allocator_traits<alloc_t>::template rebind_traits<store_type>;
@@ -443,9 +442,9 @@ class cache_impl<TPtr, Alloc, CacheDecorators...>::create_fn {
 };
 
 
-template<typename TPtr, typename Alloc, typename... CacheDecorators>
+template<typename Alloc, typename... CacheDecorators>
 template<typename... Vars>
-cache_impl<TPtr, Alloc, CacheDecorators...>::cache_impl(
+cache_impl<Alloc, CacheDecorators...>::cache_impl(
     const builder_vars_::builder_impl<Vars...>& b,
     Alloc alloc)
 : select_decorator_type<CacheDecorators, cache_impl>(b)...,
@@ -456,14 +455,14 @@ cache_impl<TPtr, Alloc, CacheDecorators...>::cache_impl(
   buckets_.resize(init_bucket_count); // May not be zero, or we'll get (unchecked) division by zero.
 }
 
-template<typename TPtr, typename Alloc, typename... CacheDecorators>
-cache_impl<TPtr, Alloc, CacheDecorators...>::~cache_impl() noexcept {
+template<typename Alloc, typename... CacheDecorators>
+cache_impl<Alloc, CacheDecorators...>::~cache_impl() noexcept {
   for (auto& b : buckets_)
     b.erase_all([this](store_type& s) { on_delete(s); });
 }
 
-template<typename TPtr, typename A, typename... D>
-auto cache_impl<TPtr, A, D...>::load_factor() const
+template<typename A, typename... D>
+auto cache_impl<A, D...>::load_factor() const
 noexcept
 -> float {
   std::lock_guard<const cache_impl> lck{ *this };
@@ -471,8 +470,8 @@ noexcept
   return std::double_t(size_) / std::double_t(buckets_.size());
 }
 
-template<typename TPtr, typename A, typename... D>
-auto cache_impl<TPtr, A, D...>::max_load_factor() const
+template<typename A, typename... D>
+auto cache_impl<A, D...>::max_load_factor() const
 noexcept
 -> float {
   std::lock_guard<const cache_impl> lck{ *this };
@@ -480,8 +479,8 @@ noexcept
   return lf_;
 }
 
-template<typename TPtr, typename A, typename... D>
-auto cache_impl<TPtr, A, D...>::max_load_factor(float lf)
+template<typename A, typename... D>
+auto cache_impl<A, D...>::max_load_factor(float lf)
 -> void {
   std::lock_guard<const cache_impl> lck{ *this };
 
@@ -491,15 +490,15 @@ auto cache_impl<TPtr, A, D...>::max_load_factor(float lf)
   maybe_rehash_();
 }
 
-template<typename TPtr, typename A, typename... D>
-auto cache_impl<TPtr, A, D...>::size() const noexcept
+template<typename A, typename... D>
+auto cache_impl<A, D...>::size() const noexcept
 -> size_type {
   std::lock_guard<const cache_impl> lck{ *this };
   return size_;
 }
 
-template<typename TPtr, typename A, typename... D>
-auto cache_impl<TPtr, A, D...>::erase_if_expired(store_type& s)
+template<typename A, typename... D>
+auto cache_impl<A, D...>::erase_if_expired(store_type& s)
 noexcept
 -> bool {
   if (s.use_count.load(std::memory_order_acquire) == 0 && s.is_expired()) {
@@ -512,8 +511,8 @@ noexcept
   }
 }
 
-template<typename TPtr, typename A, typename... D>
-auto cache_impl<TPtr, A, D...>::assert_is_present_(store_type* s) const
+template<typename A, typename... D>
+auto cache_impl<A, D...>::assert_is_present_(store_type* s) const
 noexcept
 -> void {
 #ifndef NDEBUG
@@ -564,9 +563,9 @@ noexcept
 #endif
 }
 
-template<typename TPtr, typename A, typename... D>
+template<typename A, typename... D>
 template<typename Predicate>
-auto cache_impl<TPtr, A, D...>::expire(
+auto cache_impl<A, D...>::expire(
     std::size_t hash_code,
     Predicate predicate)
 noexcept
@@ -582,9 +581,9 @@ noexcept
       .expire(*this, hash_code, std::move(predicate));
 }
 
-template<typename TPtr, typename A, typename... D>
+template<typename A, typename... D>
 template<typename Predicate>
-auto cache_impl<TPtr, A, D...>::lookup_if_present(
+auto cache_impl<A, D...>::lookup_if_present(
     std::size_t hash_code,
     Predicate predicate)
 noexcept
@@ -600,9 +599,9 @@ noexcept
       .lookup_if_present(hash_code, std::move(predicate)));
 }
 
-template<typename TPtr, typename A, typename... D>
+template<typename A, typename... D>
 template<typename Predicate, typename TplBuilder, typename Create>
-auto cache_impl<TPtr, A, D...>::lookup_or_create(
+auto cache_impl<A, D...>::lookup_or_create(
     const cache_query<Predicate, TplBuilder, Create>& q)
 -> pointer {
   // Acquire lock on the cache.
@@ -628,16 +627,16 @@ auto cache_impl<TPtr, A, D...>::lookup_or_create(
   return result;
 }
 
-template<typename TPtr, typename A, typename... D>
+template<typename A, typename... D>
 template<typename CacheQuery>
-auto cache_impl<TPtr, A, D...>::make_create_fn(CacheQuery& q)
+auto cache_impl<A, D...>::make_create_fn(CacheQuery& q)
 noexcept
 -> create_fn<CacheQuery> {
   return create_fn<CacheQuery>(*this, q);
 }
 
-template<typename TPtr, typename A, typename... D>
-auto cache_impl<TPtr, A, D...>::resolve_(
+template<typename A, typename... D>
+auto cache_impl<A, D...>::resolve_(
     std::unique_lock<const cache_impl>& lck,
     lookup_type&& l,
     store_type* created)
@@ -676,8 +675,8 @@ auto cache_impl<TPtr, A, D...>::resolve_(
   }
 }
 
-template<typename TPtr, typename A, typename... D>
-auto cache_impl<TPtr, A, D...>::compute_target_buckets_() const
+template<typename A, typename... D>
+auto cache_impl<A, D...>::compute_target_buckets_() const
 noexcept
 -> typename bucket_vector::size_type {
   const std::double_t target_buckets_dbl = std::ceil(std::double_t(size_) / lf_);
@@ -687,8 +686,8 @@ noexcept
   return target_buckets;
 }
 
-template<typename TPtr, typename A, typename... D>
-auto cache_impl<TPtr, A, D...>::maybe_rehash_()
+template<typename A, typename... D>
+auto cache_impl<A, D...>::maybe_rehash_()
 noexcept // Allocation exception is swallowed.
 -> void {
   // Check if we require rehashing.
@@ -737,23 +736,23 @@ noexcept // Allocation exception is swallowed.
   }
 }
 
-template<typename TPtr, typename A, typename... D>
-auto cache_impl<TPtr, A, D...>::on_create(store_type& s)
+template<typename A, typename... D>
+auto cache_impl<A, D...>::on_create(store_type& s)
 noexcept
 -> void {
   ++size_;
   decorators_on_create_<store_type, select_decorator_type<D, cache_impl>...>::apply(s, *this);
 }
 
-template<typename TPtr, typename A, typename... D>
-auto cache_impl<TPtr, A, D...>::on_hit(store_type& s)
+template<typename A, typename... D>
+auto cache_impl<A, D...>::on_hit(store_type& s)
 noexcept
 -> void {
   decorators_on_hit_<store_type, select_decorator_type<D, cache_impl>...>::apply(s, *this);
 }
 
-template<typename TPtr, typename A, typename... D>
-auto cache_impl<TPtr, A, D...>::on_delete(store_type& s)
+template<typename A, typename... D>
+auto cache_impl<A, D...>::on_delete(store_type& s)
 noexcept
 -> void {
   --size_;
@@ -766,9 +765,9 @@ noexcept
 }
 
 
-template<typename TPtr, typename A, typename... D>
+template<typename A, typename... D>
 template<typename CacheQuery>
-cache_impl<TPtr, A, D...>::create_fn<CacheQuery>::create_fn(
+cache_impl<A, D...>::create_fn<CacheQuery>::create_fn(
     cache_impl& owner,
     CacheQuery& q)
 noexcept
@@ -776,9 +775,9 @@ noexcept
   q(q)
 {}
 
-template<typename TPtr, typename A, typename... D>
+template<typename A, typename... D>
 template<typename CacheQuery>
-auto cache_impl<TPtr, A, D...>::create_fn<CacheQuery>::operator()(void* hint)
+auto cache_impl<A, D...>::create_fn<CacheQuery>::operator()(void* hint)
 -> store_type* {
   // Wrap create in a handler that fixes the return type.
   auto ch = make_create_handler<store_type::is_async>(q.create);

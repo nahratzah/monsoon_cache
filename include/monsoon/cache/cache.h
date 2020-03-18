@@ -358,10 +358,10 @@ class extended_cache {
   ///\brief Key type of the cache.
   ///\details
   ///For identity caches, this is the mapped type of the cache.
-  using key_type = typename cache<K, V>::key_type;
+  using key_type = typename cache<K, V, VPtr>::key_type;
   ///\brief Pointer returned by the cache.
   ///\details Shared pointer to the mapped type.
-  using pointer = typename cache<K, V>::pointer;
+  using pointer = typename cache<K, V, VPtr>::pointer;
 
   ///\bug Should we enable this, seeing as that cache is copyable?
   ///Current behaviour sends a clear message when you miss initialization,
