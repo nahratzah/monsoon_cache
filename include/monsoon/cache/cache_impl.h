@@ -266,8 +266,8 @@ class cache_impl
   ///\brief Constructor for the cache algorithms.
   ///\note \p alloc is passed in separately, so that the builder can decorate
   ///the allocator.
-  template<typename Key, typename Hash, typename Eq>
-  cache_impl(const cache_builder<Key, TPtr, Hash, Eq, Alloc>& b, Alloc alloc);
+  template<typename... Vars>
+  cache_impl(const builder_vars_::builder_impl<Vars...>& b, Alloc alloc);
 
   ///\brief Destructor.
   ~cache_impl() noexcept;
@@ -444,9 +444,9 @@ class cache_impl<TPtr, Alloc, CacheDecorators...>::create_fn {
 
 
 template<typename TPtr, typename Alloc, typename... CacheDecorators>
-template<typename Key, typename Hash, typename Eq>
+template<typename... Vars>
 cache_impl<TPtr, Alloc, CacheDecorators...>::cache_impl(
-    const cache_builder<Key, TPtr, Hash, Eq, Alloc>& b,
+    const builder_vars_::builder_impl<Vars...>& b,
     Alloc alloc)
 : select_decorator_type<CacheDecorators, cache_impl>(b)...,
   buckets_(b.allocator()),

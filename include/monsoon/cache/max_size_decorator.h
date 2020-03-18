@@ -21,7 +21,7 @@ struct max_size_decorator {
   template<typename CacheImpl>
   class for_impl_type {
    public:
-    constexpr for_impl_type(const cache_builder_vars& b)
+    constexpr for_impl_type(const builder_vars_::max_size_var<true>& b)
     : max_size_(b.max_size().value())
     {}
 

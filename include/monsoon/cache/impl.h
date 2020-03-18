@@ -1,38 +1,29 @@
 #ifndef MONSOON_CACHE_IMPL_H
 #define MONSOON_CACHE_IMPL_H
 
-///\file
-///\ingroup cache
-
-#include <cassert>
+#include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <thread>
-#include <vector>
 #include <type_traits>
 #include <utility>
-#include <limits>
+#include <vector>
 #include <monsoon/cache/builder.h>
 #include <monsoon/cache/cache_impl.h>
-#include <monsoon/cache/thread_safe_decorator.h>
-#include <monsoon/cache/weaken_decorator.h>
 #include <monsoon/cache/access_expire_decorator.h>
-#include <monsoon/cache/max_age_decorator.h>
 #include <monsoon/cache/expire_queue.h>
+#include <monsoon/cache/max_age_decorator.h>
 #include <monsoon/cache/max_size_decorator.h>
-#include <monsoon/cache/element.h>
 #include <monsoon/cache/mem_use.h>
 #include <monsoon/cache/stats.h>
+#include <monsoon/cache/thread_safe_decorator.h>
+#include <monsoon/cache/weaken_decorator.h>
 #include <instrumentation/gauge.h>
 #include <instrumentation/engine.h>
 #include <instrumentation/path.h>
 #include <instrumentation/tags.h>
 
-namespace monsoon::cache {
-
-
-///\brief Helpers for the builder::build() method.
-///\ingroup cache_detail
-namespace builder_detail {
+namespace monsoon::cache::builder_detail {
 
 
 struct cache_async_decorator {
@@ -66,6 +57,18 @@ auto create_mem_tracking(Alloc& alloc)
 namespace {
 
 
+template<typename Cache, typename = void>
+struct has_set_mem_use_
+: std::false_type {};
+
+template<typename Cache>
+struct has_set_mem_use_<Cache, std::void_t<decltype(std::declval<Cache&>().set_mem_use(std::declval<std::shared_ptr<const mem_use>>()))>>
+: std::true_type {};
+
+template<typename Cache>
+constexpr bool has_set_mem_use = has_set_mem_use_<Cache>::value;
+
+
 template<typename CDS, typename T, typename... D>
 struct add_all_except_;
 
@@ -76,10 +79,38 @@ struct add_all_except_<CDS, T> {
 
 template<typename CDS, typename T, typename D0, typename... D>
 struct add_all_except_<CDS, T, D0, D...> {
-  using type = typename std::conditional_t<std::is_same_v<T, D0>,
-        add_all_except_<CDS, T, D...>,
-        add_all_except_<decltype(std::declval<CDS>().template add<D0>()), T, D...>>::type;
+  using type = typename std::conditional_t<
+      std::is_same_v<T, D0>,
+      add_all_except_<CDS, T, D...>,
+      add_all_except_<typename CDS::template add<D0>, T, D...>>::type;
 };
+
+///\brief List of decorators.
+template<typename... T> struct decorator_list;
+
+template<typename CDS, typename List> struct add_all_;
+
+template<typename CDS>
+struct add_all_<CDS, decorator_list<>> {
+  using type = CDS;
+};
+
+template<typename CDS, typename T0, typename... T>
+struct add_all_<CDS, decorator_list<T0, T...>>
+: add_all_<typename CDS::template add<T0>, decorator_list<T...>>
+{};
+
+template<typename CDS, typename List> struct remove_all_;
+
+template<typename CDS>
+struct remove_all_<CDS, decorator_list<>> {
+  using type = CDS;
+};
+
+template<typename CDS, typename T0, typename... T>
+struct remove_all_<CDS, decorator_list<T0, T...>>
+: remove_all_<typename CDS::template remove<T0>, decorator_list<T...>>
+{};
 
 ///\brief Keep track of all decorators that are to be applied to the cache.
 ///\ingroup cache_detail
@@ -93,243 +124,246 @@ struct cache_decorator_set {
   using cache_type = cache_impl<TPtr, Alloc, D...>;
 
   ///\brief Add type T to the decorator set.
-  ///\details Does nothing if T is already part of the decorator set.
-  ///\returns A decorator set with all decorators in this, and with T.
+  ///\details Does nothing if T is already part of the decorator set, or void.
+  ///\returns A decorator set with all decorators in this, and with those in L added.
   ///\tparam T The decorator to add to the set.
   template<typename T>
-  constexpr auto add() const noexcept
-  -> std::conditional_t<
-      std::disjunction_v<std::is_same<D, T>...>,
+  using add = std::conditional_t<
+      std::disjunction_v<std::is_void<T>, std::is_same<D, T>...>,
       cache_decorator_set<D...>,
-      cache_decorator_set<D..., T>> {
-    return {};
-  }
+      cache_decorator_set<D..., T>>;
+
+  ///\brief Add a list of types to the decorator set.
+  ///\details Void decorators are ignored.
+  ///\returns A decorator set with all decorators in this, and with T.
+  ///\tparam L The decorator list to add to the set.
+  template<typename L>
+  using add_all = typename add_all_<cache_decorator_set, L>::type;
 
   ///\brief Remove type T from the decorator set.
   ///\details Does nothing if T is not part of the decorator set.
   ///\returns A decorator set with all decorators in this, except T.
   ///\tparam T The decorator to remove from the set.
   template<typename T>
-  constexpr auto remove() const noexcept
-  -> typename add_all_except_<cache_decorator_set<>, T, D...>::type {
-    return {};
-  }
+  using remove = typename add_all_except_<cache_decorator_set<>, T, D...>::type;
+
+  ///\brief Remove a list of types from the decorator set.
+  ///\details If a decorator isn't part of the set (or is the void type), it is ignored.
+  ///\returns A decorator set with all decorators in this, except those in L.
+  ///\tparam L The decorator list to add to the set.
+  template<typename L>
+  using remove_all = typename remove_all_<cache_decorator_set, L>::type;
 };
 
 
-template<typename NextApply>
-struct apply_stats_ {
-  template<typename... D>
-  auto operator()(cache_decorator_set<D...> d)
-  -> decltype(auto) {
-    if (b.stats().has_value()) {
-      return next(d.template add<stats_decorator>());
-    } else {
-      return next(d);
-    }
-  }
+template<typename CDS, typename... Apply> struct make_cache_decorator_set_;
 
-  const cache_builder_vars& b;
-  NextApply next;
+template<typename CDS>
+struct make_cache_decorator_set_<CDS> {
+  using type = CDS;
 };
 
-template<typename NextApply>
-constexpr auto apply_stats(const cache_builder_vars& b, NextApply&& next)
--> apply_stats_<std::decay_t<NextApply>> {
-  return { b, std::forward<NextApply>(next) };
-}
+template<typename CDS, typename Apply0, typename... Apply>
+struct make_cache_decorator_set_<CDS, Apply0, Apply...>
+: make_cache_decorator_set_<
+    typename CDS::template remove_all<typename Apply0::remove>::template add_all<typename Apply0::add>,
+    Apply...>
+{};
+
+///\brief Take multiple decorators and add them to the decorator set.
+///\note It's fine if the decorator is the void type.
+template<typename... Apply>
+using make_cache_decorator_set = typename make_cache_decorator_set_<cache_decorator_set<>, Apply...>::type;
 
 
-template<typename NextApply>
-struct apply_thread_safe_ {
-  template<typename... D>
-  auto operator()(cache_decorator_set<D...> d)
-  -> decltype(auto) {
-    if (b.thread_safe())
-      return next(d.template add<thread_safe_decorator<true>>());
-    else
-      return next(d.template add<thread_safe_decorator<false>>());
-  }
+/*
+ * Decorator selectors start here.
+ * These select a decorator based on the builder configuration.
+ */
 
-  const cache_builder_vars& b;
-  NextApply next;
+
+template<typename Builder, typename = void> struct apply_stats_;
+
+template<typename Builder>
+struct apply_stats_<Builder, std::enable_if_t<std::is_base_of_v<builder_vars_::stats_var<true>, Builder>>> {
+  using add = decorator_list<stats_decorator>;
+  using remove = decorator_list<>;
 };
 
-template<typename NextApply>
-constexpr auto apply_thread_safe(const cache_builder_vars& b, NextApply&& next)
--> apply_thread_safe_<std::decay_t<NextApply>> {
-  return { b, std::forward<NextApply>(next) };
-}
-
-
-template<typename KeyType, typename NextApply>
-struct apply_key_type_ {
-  template<typename... D>
-  auto operator()(cache_decorator_set<D...> d)
-  -> decltype(auto) {
-    if constexpr(std::is_same_v<void, KeyType>)
-      return next(d);
-    else
-      return next(d.template add<cache_key_decorator<KeyType>>());
-  }
-
-  NextApply next;
+template<typename Builder>
+struct apply_stats_<Builder, std::enable_if_t<std::is_base_of_v<builder_vars_::stats_var<false>, Builder>>> {
+  using add = decorator_list<>;
+  using remove = decorator_list<>;
 };
 
-template<typename Builder, typename NextApply>
-constexpr auto apply_key_type(const Builder& b, NextApply&& next)
--> apply_key_type_<typename Builder::key_type, std::decay_t<NextApply>> {
-  return { std::forward<NextApply>(next) };
-}
+///\brief Stats decorator selection.
+template<typename Builder>
+using apply_stats_t = apply_stats_<Builder>;
 
 
-template<typename NextApply>
-struct apply_access_expire_ {
-  template<typename... D>
-  auto operator()(cache_decorator_set<D...> d)
-  -> decltype(auto) {
-    if (b.access_expire().has_value())
-      return next(d
-          .template remove<weaken_decorator>()
-          .template add<cache_expire_queue_decorator>()
-          .template add<access_expire_decorator>());
-    else
-      return next(d);
-  }
+template<typename Builder, typename = void> struct apply_thread_safe_;
 
-  const cache_builder_vars& b;
-  NextApply next;
+template<typename Builder>
+struct apply_thread_safe_<Builder, std::enable_if_t<std::is_base_of_v<builder_vars_::thread_safe_var<true>, Builder>>> {
+  using add = decorator_list<thread_safe_decorator<true>>;
+  using remove = decorator_list<>;
 };
 
-template<typename NextApply>
-constexpr auto apply_access_expire(const cache_builder_vars& b, NextApply&& next)
--> apply_access_expire_<std::decay_t<NextApply>> {
-  return { b, std::forward<NextApply>(next) };
-}
-
-
-template<typename NextApply>
-struct apply_max_age_ {
-  template<typename... D>
-  auto operator()(cache_decorator_set<D...> d)
-  -> decltype(auto) {
-    if (b.max_age().has_value())
-      return next(d.template add<max_age_decorator>());
-    else
-      return next(d);
-  }
-
-  const cache_builder_vars& b;
-  NextApply next;
+template<typename Builder>
+struct apply_thread_safe_<Builder, std::enable_if_t<std::is_base_of_v<builder_vars_::thread_safe_var<false>, Builder>>> {
+  using add = decorator_list<thread_safe_decorator<false>>;
+  using remove = decorator_list<>;
 };
 
-template<typename NextApply>
-constexpr auto apply_max_age(const cache_builder_vars& b, NextApply&& next)
--> apply_max_age_<std::decay_t<NextApply>> {
-  return { b, std::forward<NextApply>(next) };
-}
+///\brief Thread-safe decorator selection.
+template<typename Builder>
+using apply_thread_safe_t = apply_thread_safe_<Builder>;
 
 
-template<typename KeyType, typename NextApply>
-struct apply_async_ {
-  template<typename... D>
-  auto operator()(cache_decorator_set<D...> d)
-  -> decltype(auto) {
-    if (b.async())
-      return next(d.template add<cache_async_decorator>());
-    else
-      return next(d);
-  }
+template<typename Builder>
+struct key_type_selector_ {
+  private:
+  template<typename Type>
+  static auto op_(const builder_vars_::key_var<Type>&) -> builder_vars_::key_var<Type>;
 
-  const cache_builder_vars& b;
-  NextApply next;
+  public:
+  using type = decltype(op_(std::declval<const Builder&>()));
 };
 
-template<typename NextApply>
-struct apply_async_<void, NextApply> {
-  template<typename... D>
-  auto operator()(cache_decorator_set<D...> d)
-  -> decltype(auto) {
-    return next(d);
-  }
-
-  const cache_builder_vars& b;
-  NextApply next;
+template<typename T>
+struct make_cache_key_decorator_ {
+  using type = cache_key_decorator<T>;
+};
+template<>
+struct make_cache_key_decorator_<void> {
+  using type = void;
 };
 
-template<typename Builder, typename NextApply>
-constexpr auto apply_async(const Builder& b, NextApply&& next)
--> apply_async_<typename Builder::key_type, std::decay_t<NextApply>> {
-  return { b, std::forward<NextApply>(next) };
-}
+template<typename Builder, typename = void> struct apply_key_type_;
 
-
-template<typename NextApply>
-struct apply_max_size_ {
-  template<typename... D>
-  auto operator()(cache_decorator_set<D...> d)
-  -> decltype(auto) {
-    if (b.max_size().has_value())
-      return next(d
-          .template remove<weaken_decorator>()
-          .template add<cache_expire_queue_decorator>()
-          .template add<max_size_decorator>());
-    else
-      return next(d);
-  }
-
-  const cache_builder_vars& b;
-  NextApply next;
+template<typename Builder>
+struct apply_key_type_<Builder, std::void_t<typename key_type_selector_<Builder>::type>> {
+  using key_var = typename key_type_selector_<Builder>::type;
+  using add = decorator_list<typename make_cache_key_decorator_<typename key_var::key_or_void_type>::type>;
+  using remove = decorator_list<>;
 };
 
-template<typename NextApply>
-constexpr auto apply_max_size(const cache_builder_vars& b, NextApply&& next)
--> apply_max_size_<std::decay_t<NextApply>> {
-  return { b, std::forward<NextApply>(next) };
-}
+///\brief Key-type decorator selection.
+template<typename Builder>
+using apply_key_type_t = apply_key_type_<Builder>;
 
 
-template<typename NextApply>
-struct apply_max_mem_ {
-  template<typename... D>
-  auto operator()(cache_decorator_set<D...> d)
-  -> decltype(auto) {
-    if (b.max_memory().has_value())
-      return next(d
-          .template remove<weaken_decorator>()
-          .template add<cache_expire_queue_decorator>()
-          .template add<cache_max_mem_decorator>());
-    else
-      return next(d);
-  }
+template<typename Builder, typename = void> struct apply_access_expire_;
 
-  const cache_builder_vars& b;
-  NextApply next;
+template<typename Builder>
+struct apply_access_expire_<Builder, std::enable_if_t<std::is_base_of_v<builder_vars_::access_expire_var<true>, Builder>>> {
+  using add = decorator_list<cache_expire_queue_decorator, access_expire_decorator>;
+  using remove = decorator_list<weaken_decorator>;
 };
 
-template<typename NextApply>
-constexpr auto apply_max_mem(const cache_builder_vars& b, NextApply&& next)
--> apply_max_mem_<std::decay_t<NextApply>> {
-  return { b, std::forward<NextApply>(next) };
-}
+template<typename Builder>
+struct apply_access_expire_<Builder, std::enable_if_t<std::is_base_of_v<builder_vars_::access_expire_var<false>, Builder>>> {
+  using add = decorator_list<>;
+  using remove = decorator_list<>;
+};
+
+///\brief Access-expire decorator selection.
+template<typename Builder>
+using apply_access_expire_t = apply_access_expire_<Builder>;
 
 
-template<typename Cache, typename = void>
-struct has_set_mem_use_
-: std::false_type {};
+template<typename Builder, typename = void> struct apply_max_age_;
 
-template<typename Cache>
-struct has_set_mem_use_<Cache, std::void_t<decltype(std::declval<Cache&>().set_mem_use(std::declval<std::shared_ptr<const mem_use>>()))>>
-: std::true_type {};
+template<typename Builder>
+struct apply_max_age_<Builder, std::enable_if_t<std::is_base_of_v<builder_vars_::max_age_var<true>, Builder>>> {
+  using add = decorator_list<max_age_decorator>;
+  using remove = decorator_list<>;
+};
 
-template<typename Cache>
-constexpr bool has_set_mem_use = has_set_mem_use_<Cache>::value;
+template<typename Builder>
+struct apply_max_age_<Builder, std::enable_if_t<std::is_base_of_v<builder_vars_::max_age_var<false>, Builder>>> {
+  using add = decorator_list<>;
+  using remove = decorator_list<>;
+};
+
+///\brief Max-age decorator selection.
+template<typename Builder>
+using apply_max_age_t = apply_max_age_<Builder>;
+
+
+template<typename Builder, typename = void> struct apply_async_;
+
+template<typename Builder>
+struct apply_async_<Builder, std::enable_if_t<std::is_base_of_v<builder_vars_::async_var<true>, Builder>>> {
+  static_assert(!std::is_void_v<typename Builder::key_or_void_type>,
+      "identity cache can not be async");
+
+  using add = decorator_list<cache_async_decorator>;
+  using remove = decorator_list<>;
+};
+
+template<typename Builder>
+struct apply_async_<Builder, std::enable_if_t<std::is_base_of_v<builder_vars_::async_var<false>, Builder>>> {
+  using add = decorator_list<>;
+  using remove = decorator_list<>;
+};
+
+///\brief Max-age decorator selection.
+template<typename Builder>
+using apply_async_t = apply_async_<Builder>;
+
+
+template<typename Builder, typename = void> struct apply_max_size_;
+
+template<typename Builder>
+struct apply_max_size_<Builder, std::enable_if_t<std::is_base_of_v<builder_vars_::max_size_var<true>, Builder>>> {
+  using add = decorator_list<cache_expire_queue_decorator, max_size_decorator>;
+  using remove = decorator_list<weaken_decorator>;
+};
+
+template<typename Builder>
+struct apply_max_size_<Builder, std::enable_if_t<std::is_base_of_v<builder_vars_::max_size_var<false>, Builder>>> {
+  using add = decorator_list<>;
+  using remove = decorator_list<>;
+};
+
+///\brief Max-size decorator selection.
+template<typename Builder>
+using apply_max_size_t = apply_max_size_<Builder>;
+
+
+template<typename Builder, typename = void> struct apply_max_mem_;
+
+template<typename Builder>
+struct apply_max_mem_<Builder, std::enable_if_t<std::is_base_of_v<builder_vars_::max_memory_var<true>, Builder>>> {
+  using add = decorator_list<cache_expire_queue_decorator, cache_max_mem_decorator>;
+  using remove = decorator_list<weaken_decorator>;
+};
+
+template<typename Builder>
+struct apply_max_mem_<Builder, std::enable_if_t<std::is_base_of_v<builder_vars_::max_memory_var<false>, Builder>>> {
+  using add = decorator_list<>;
+  using remove = decorator_list<>;
+};
+
+///\brief Max-memory decorator selection.
+template<typename Builder>
+using apply_max_mem_t = apply_max_mem_<Builder>;
+
+
+///\brief Weaken decorator.
+///\note This type is unconditionally added at the start and
+///removed if/when appropriate by other appliers.
+struct apply_weaken_decorator_t {
+  using add = decorator_list<weaken_decorator>;
+  using remove = decorator_list<>;
+};
 
 
 template<typename Impl, typename = void>
 class stats_impl {
  public:
-  stats_impl([[maybe_unused]] const cache_builder_vars& vars) noexcept {}
+  stats_impl([[maybe_unused]] const builder_vars_::stats_var<false>& vars) noexcept {}
 
   auto set_stats([[maybe_unused]] Impl& impl)
   noexcept
@@ -349,7 +383,7 @@ class stats_impl<Impl, std::enable_if_t<std::is_base_of_v<stats_decorator, Impl>
 : public stats_record
 {
  public:
-  stats_impl(const cache_builder_vars& vars)
+  stats_impl(const builder_vars_::stats_var<true>& vars)
   : stats_record(vars),
     mem_use_gauge_(
         instrumentation::engine::global().new_gauge_cb(
@@ -408,8 +442,8 @@ class wrapper final
   using pointer = typename extended_cache_intf<K, VPtr, Hash, Eq, typename Impl::alloc_t, Create>::pointer;
   using store_type = typename Impl::store_type;
 
-  template<typename CreateArg>
-  wrapper(const cache_builder<K, VPtr, Hash, Eq, typename Impl::alloc_t>& b,
+  template<typename... Vars, typename CreateArg>
+  wrapper(const builder_vars_::builder_impl<Vars...>& b,
       CreateArg&& create,
       typename Impl::alloc_t alloc)
   : extended_cache_intf<K, VPtr, Hash, Eq, typename Impl::alloc_t, Create>(
@@ -502,8 +536,8 @@ class sharded_wrapper final
   sharded_wrapper& operator=(const sharded_wrapper&) = delete;
   sharded_wrapper& operator=(sharded_wrapper&&) = delete;
 
-  template<typename CreateArg>
-  sharded_wrapper(cache_builder<K, VPtr, Hash, Eq, Alloc> b,
+  template<typename... Vars, typename CreateArg>
+  sharded_wrapper(builder_vars_::builder_impl<Vars...> b,
       unsigned int shards,
       CreateArg&& create,
       Alloc alloc)
@@ -638,53 +672,81 @@ class sharded_wrapper final
 } /* namespace monsoon::cache::builder_detail */
 
 
-template<typename K, typename VPtr, typename Hash, typename Eq, typename Alloc>
+namespace monsoon::cache::builder_vars_ {
+
+
+template<typename... Vars>
 template<typename Fn>
-auto cache_builder<K, VPtr, Hash, Eq, Alloc>::build(Fn&& fn) const
--> extended_cache<K, typename std::pointer_traits<VPtr>::element_type, Hash, Eq, Alloc, std::decay_t<Fn>, VPtr> {
+auto builder_impl<Vars...>::build(Fn&& fn) const
+-> extended_cache<
+    typename builder_impl::key_or_void_type,
+    typename builder_impl::mapped_type,
+    typename builder_impl::hash_type,
+    typename builder_impl::equality_type,
+    typename builder_impl::allocator_type,
+    std::decay_t<Fn>,
+    typename builder_impl::pointer> {
   using namespace builder_detail;
 
-  auto alloc = allocator();
+  using extended_cache_type = extended_cache<
+      typename builder_impl::key_or_void_type,
+      typename builder_impl::mapped_type,
+      typename builder_impl::hash_type,
+      typename builder_impl::equality_type,
+      typename builder_impl::allocator_type,
+      std::decay_t<Fn>,
+      typename builder_impl::pointer>;
+
+  auto alloc = this->allocator();
   std::shared_ptr<mem_use> mem_tracking = create_mem_tracking(alloc);
 
-  const unsigned int shards = (!thread_safe()
+  const unsigned int shards = (!this->thread_safe()
       ? 0u
-      : (concurrency() == 0u ? std::thread::hardware_concurrency() : concurrency()));
+      : (this->concurrency() == 0u ? std::thread::hardware_concurrency() : this->concurrency()));
 
-  auto builder_impl =
-      apply_stats(*this,
-          apply_async(*this,
-              apply_max_age(*this,
-                  apply_access_expire(*this,
-                      apply_key_type(*this,
-                          apply_thread_safe(*this,
-                              apply_max_size(*this,
-                                  apply_max_mem(*this,
-                                      [this, &fn, shards, &alloc, &mem_tracking](auto decorators) -> std::shared_ptr<extended_cache_intf<K, VPtr, Hash, Eq, Alloc, std::decay_t<Fn>>> {
-                                        using basic_type = typename decltype(decorators)::template cache_type<VPtr, Alloc>;
-                                        using wrapper_type = wrapper<K, VPtr, basic_type, Hash, Eq, std::decay_t<Fn>>;
-                                        using sharded_wrapper_type = sharded_wrapper<K, VPtr, basic_type, Hash, Eq, Alloc, std::decay_t<Fn>>;
+  using decorator_set = make_cache_decorator_set<
+      apply_weaken_decorator_t,
+      apply_stats_t<builder_impl>,
+      apply_async_t<builder_impl>,
+      apply_max_age_t<builder_impl>,
+      apply_access_expire_t<builder_impl>,
+      apply_key_type_t<builder_impl>,
+      apply_thread_safe_t<builder_impl>,
+      apply_max_size_t<builder_impl>,
+      apply_max_mem_t<builder_impl>>;
+  using basic_type = typename decorator_set::template cache_type<typename builder_impl::pointer, typename builder_impl::allocator_type>;
+  using wrapper_type = wrapper<
+      typename builder_impl::key_or_void_type,
+      typename builder_impl::pointer,
+      basic_type,
+      typename builder_impl::hash_type,
+      typename builder_impl::equality_type,
+      std::decay_t<Fn>>;
+  using sharded_wrapper_type = sharded_wrapper<
+      typename builder_impl::key_or_void_type,
+      typename builder_impl::pointer,
+      basic_type,
+      typename builder_impl::hash_type,
+      typename builder_impl::equality_type,
+      typename builder_impl::allocator_type,
+      std::decay_t<Fn>>;
 
-                                        if (shards > 1u) {
-                                          auto impl = std::allocate_shared<sharded_wrapper_type>(
-                                              alloc,
-                                              *this, shards, std::forward<Fn>(fn), alloc);
-                                          impl->set_mem_use(std::move(mem_tracking));
-                                          return impl;
-                                        } else {
-                                          auto impl = std::allocate_shared<wrapper_type>(
-                                              alloc,
-                                              *this, std::forward<Fn>(fn), alloc);
-                                          impl->set_mem_use(std::move(mem_tracking));
-                                          return impl;
-                                        }
-                                      }))))))));
-
-  return extended_cache<K, typename std::pointer_traits<VPtr>::element_type, Hash, Eq, Alloc, std::decay_t<Fn>, VPtr>(
-      builder_impl(cache_decorator_set<>().template add<weaken_decorator>()));
-}
+  if (shards > 1u) {
+    auto impl = std::allocate_shared<sharded_wrapper_type>(
+        alloc,
+        *this, shards, std::forward<Fn>(fn), alloc);
+    impl->set_mem_use(std::move(mem_tracking));
+    return extended_cache_type(std::move(impl));
+  } else {
+    auto impl = std::allocate_shared<wrapper_type>(
+        alloc,
+        *this, std::forward<Fn>(fn), alloc);
+    impl->set_mem_use(std::move(mem_tracking));
+    return extended_cache_type(std::move(impl));
+  }
+};
 
 
-} /* namespace monsoon::cache */
+} /* namespace monsoon::cache::builder_vars_ */
 
 #endif /* MONSOON_CACHE_IMPL_H */

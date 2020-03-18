@@ -6,6 +6,7 @@
 
 #include <chrono>
 #include <memory>
+#include <monsoon/cache/builder.h>
 
 namespace monsoon::cache {
 
@@ -22,7 +23,7 @@ struct max_age_decorator {
     time_point expire;
   };
 
-  max_age_decorator(const cache_builder_vars& b)
+  max_age_decorator(const builder_vars_::max_age_var<true>& b)
   : duration(b.max_age().value())
   {}
 

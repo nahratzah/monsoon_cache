@@ -8,7 +8,7 @@ TEST(cache_async) {
   int visits = 0;
 
   cache<int, int> c = cache<int, int>::builder()
-      .async(true)
+      .enable_async()
       .build(
           [&]([[maybe_unused]] auto alloc, int i) {
             REQUIRE CHECK_EQUAL(1, i);

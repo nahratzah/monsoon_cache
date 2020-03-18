@@ -348,8 +348,7 @@ class cache {
 template<typename K, typename V, typename Hash, typename Eq, typename Alloc, typename Create, typename VPtr>
 class extended_cache {
   // Cache builder will use private constructor to instantiate cache.
-  template<typename OtherK, typename OtherVPtr, typename OtherHash, typename OtherEq, typename OtherAlloc>
-  friend class cache_builder;
+  template<typename...> friend class monsoon::cache::builder_vars_::builder_impl;
 
  private:
   using extended_cache_type = extended_cache_intf<K, VPtr, Hash, Eq, Alloc, Create>;

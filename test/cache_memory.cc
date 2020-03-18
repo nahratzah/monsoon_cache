@@ -2,7 +2,7 @@
 
 TEST(cache_memory) {
   cache<int, int> c = cache<int, int>::builder()
-      .with_allocator(cache_allocator<std::allocator<int>>())
+      .allocator(cache_allocator<std::allocator<int>>())
       .not_thread_safe()
       .max_memory(500 * sizeof(int))
       .build(mock_int_to_int_fn());

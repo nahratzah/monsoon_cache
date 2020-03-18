@@ -43,7 +43,7 @@ struct storage_pointer_decorator {
   {
    public:
     spec() {} // XXX delete
-    spec(const cache_builder_vars& b) {} // XXX implement
+    template<typename Builder> spec(const Builder& b) {} // XXX implement
 
     template<typename Variant>
     void storage_init_(Variant& v, pointer_type ptr) const noexcept {

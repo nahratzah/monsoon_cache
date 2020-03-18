@@ -16,7 +16,7 @@ namespace monsoon::cache {
 
 class stats_record {
  public:
-  stats_record(const cache_builder_vars& vars) {
+  stats_record(const builder_vars_::stats_var<true>& vars) {
     if (!vars.stats()->name.empty()) {
       hits_ = instrumentation::counter("monsoon.cache.hit", make_tags(vars));
       misses_ = instrumentation::counter("monsoon.cache.miss", make_tags(vars));
@@ -42,7 +42,7 @@ class stats_record {
     ++deletes_;
   }
 
-  static auto make_tags(const cache_builder_vars& vars)
+  static auto make_tags(const builder_vars_::stats_var<true>& vars)
   -> instrumentation::tags {
     instrumentation::tags t;
     t.with("name", vars.stats()->name);
@@ -61,7 +61,7 @@ class stats_record {
 
 class stats_decorator {
  public:
-  stats_decorator(const cache_builder_vars& vars) noexcept {}
+  stats_decorator(const builder_vars_::stats_var<true>& vars) noexcept {}
 
   auto set_stats_record(stats_record* record)
   noexcept

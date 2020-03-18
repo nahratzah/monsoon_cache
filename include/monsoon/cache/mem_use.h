@@ -6,6 +6,7 @@
 
 #include <atomic>
 #include <monsoon/cache/allocator.h>
+#include <monsoon/cache/builder.h>
 
 namespace monsoon::cache {
 
@@ -74,7 +75,7 @@ struct cache_max_mem_decorator {
   template<typename ImplType>
   class for_impl_type {
    public:
-    for_impl_type(const cache_builder_vars& v)
+    for_impl_type(const builder_vars_::max_memory_var<true>& v)
     : max_mem_use_(v.max_memory().value())
     {}
 

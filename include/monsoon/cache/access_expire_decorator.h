@@ -7,6 +7,7 @@
 #include <chrono>
 #include <memory>
 #include <monsoon/cache/expire_queue.h>
+#include <monsoon/cache/builder.h>
 
 namespace monsoon::cache {
 
@@ -45,7 +46,7 @@ struct access_expire_decorator {
   struct for_impl_type {
     using element_decorator_type = access_expire_decorator::element_decorator_type;
 
-    for_impl_type(const cache_builder_vars& b)
+    for_impl_type(const builder_vars_::access_expire_var<true>& b)
     : duration(b.access_expire().value())
     {}
 
