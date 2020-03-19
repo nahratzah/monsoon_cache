@@ -1,6 +1,7 @@
 #ifndef MONSOON_CACHE_STORAGE_POINTER_DECORATOR_H
 #define MONSOON_CACHE_STORAGE_POINTER_DECORATOR_H
 
+#include <monsoon/cache/builder.h>
 #include <memory>
 #include <tuple>
 #include <type_traits>
@@ -47,8 +48,16 @@ struct storage_pointer_decorator {
    public:
     using element_decorator_type = storage_pointer_element_decorator<VPtr, StoragePtr, VPtrToStoragePtrFn, StoragePtrToVPtrFn>;
 
-    spec() {} // XXX delete
-    template<typename Builder> spec(const Builder& b) {} // XXX implement
+    explicit spec(const builder_vars_::storage_override_var<void, void, void>& b) {}
+
+    explicit spec(const builder_vars_::storage_override_var<StoragePtr, VPtrToStoragePtrFn, StoragePtrToVPtrFn>& b)
+    : VPtrToStoragePtrFn(b.storage_override_cargs_fn()),
+      StoragePtrToVPtrFn(b.storage_override_deref_fn())
+    {}
+
+    auto init_tuple() const -> std::tuple<const spec&> {
+      return { *this };
+    }
 
     template<typename Variant>
     void storage_init_(Variant& v, pointer_type ptr) const noexcept {
@@ -104,33 +113,9 @@ struct storage_to_vptr_identity_conversion_ {
 };
 
 
-#if 0
-
 ///\brief The default storage pointer decorator is one where the stored pointer type matches the external type.
 template<typename VPtr>
 using default_storage_pointer_decorator = storage_pointer_decorator<VPtr, VPtr, vptr_to_storage_identity_conversion_<VPtr>, storage_to_vptr_identity_conversion_<VPtr>>;
-
-#else
-
-template<typename VPtr>
-struct funny_v_to_s {
-  auto operator()(const VPtr& ptr) const noexcept -> std::tuple<int, VPtr> {
-    return { 17, ptr };
-  }
-};
-
-template<typename VPtr>
-struct funny_s_to_v {
-  auto operator()(const std::tuple<int, VPtr>& tpl) const noexcept -> const VPtr& {
-    return std::get<1>(tpl);
-  }
-};
-
-// For debug, we force storage type to be different.
-template<typename VPtr>
-using default_storage_pointer_decorator = storage_pointer_decorator<VPtr, std::tuple<int, VPtr>, funny_v_to_s<VPtr>, funny_s_to_v<VPtr>>;
-
-#endif
 
 
 } /* namespace monsoon::cache */

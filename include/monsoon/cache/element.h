@@ -314,7 +314,7 @@ template<typename Alloc, typename... DecoratorCtx>
 element<D...>::element(std::allocator_arg_t tag, Alloc alloc,
     pointer init, std::size_t hash,
     std::tuple<DecoratorCtx...> decorator_ctx) noexcept
-: basic_element<typename select_storage_pointer_decorator_<D...>::type, std::disjunction_v<std::is_base_of<async_element_decorator, D>...>>(storage_spec(), std::move(init), hash),
+: basic_element<typename select_storage_pointer_decorator_<D...>::type, std::disjunction_v<std::is_base_of<async_element_decorator, D>...>>(std::get<const storage_spec&>(decorator_ctx), std::move(init), hash),
   D(tag, alloc, decorator_ctx)...
 {}
 
@@ -323,7 +323,7 @@ template<typename Alloc, typename... DecoratorCtx, bool Enable>
 element<D...>::element(std::allocator_arg_t tag, Alloc alloc,
     std::enable_if_t<Enable, future_type> init, std::size_t hash,
     std::tuple<DecoratorCtx...> decorator_ctx) noexcept
-: basic_element<typename select_storage_pointer_decorator_<D...>::type, std::disjunction_v<std::is_base_of<async_element_decorator, D>...>>(storage_spec(), std::move(init), hash),
+: basic_element<typename select_storage_pointer_decorator_<D...>::type, std::disjunction_v<std::is_base_of<async_element_decorator, D>...>>(std::get<const storage_spec&>(decorator_ctx), std::move(init), hash),
   D(tag, alloc, decorator_ctx)...
 {}
 
