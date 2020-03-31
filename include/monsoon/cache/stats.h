@@ -70,7 +70,7 @@ class stats_decorator {
   }
 
   template<typename T>
-  auto on_hit([[maybe_unused]] const T& elem)
+  auto on_hit(const T& elem [[maybe_unused]])
   noexcept
   -> void {
     assert(record_ != nullptr);
@@ -78,7 +78,7 @@ class stats_decorator {
   }
 
   template<typename T>
-  auto on_create([[maybe_unused]] const T& elem)
+  auto on_create(const T& elem [[maybe_unused]])
   noexcept
   -> void {
     assert(record_ != nullptr);
@@ -86,7 +86,7 @@ class stats_decorator {
   }
 
   template<typename T>
-  auto on_delete([[maybe_unused]] const T& elem)
+  auto on_delete(const T& elem [[maybe_unused]])
   noexcept
   -> void {
     assert(record_ != nullptr);

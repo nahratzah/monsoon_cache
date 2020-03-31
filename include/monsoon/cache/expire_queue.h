@@ -40,9 +40,9 @@ class expire_link {
   ///\brief Element constructor. Ensures this becomes an unlinked element.
   template<typename Alloc, typename... Types>
   expire_link(
-      [[maybe_unused]] std::allocator_arg_t aa,
-      [[maybe_unused]] const Alloc& a,
-      [[maybe_unused]] const std::tuple<Types...>& init)
+      std::allocator_arg_t aa [[maybe_unused]],
+      const Alloc& a [[maybe_unused]],
+      const std::tuple<Types...>& init [[maybe_unused]])
   : expire_link(queue_id::none)
   {}
 
@@ -195,7 +195,7 @@ class base_expire_queue {
   base_expire_queue& operator=(base_expire_queue&&) = delete;
 
   template<typename Builder>
-  constexpr base_expire_queue([[maybe_unused]] const Builder& b) noexcept {}
+  constexpr base_expire_queue(const Builder& b [[maybe_unused]]) noexcept {}
 
  protected:
   ///\brief Import queue_id, for convenience.

@@ -30,7 +30,7 @@ struct key_decorator {
   key_decorator(
       Alloc& alloc,
       const std::tuple<Types...>& init,
-      [[maybe_unused]] alloc_last_ discriminant)
+      alloc_last_ discriminant [[maybe_unused]])
   noexcept(std::is_nothrow_constructible_v<key_type, const key_type&, Alloc>)
   : key(std::get<key_type>(init), alloc)
   {}
@@ -39,16 +39,16 @@ struct key_decorator {
   key_decorator(
       Alloc& alloc,
       const std::tuple<Types...>& init,
-      [[maybe_unused]] alloc_tagged_ discriminant)
+      alloc_tagged_ discriminant [[maybe_unused]])
   noexcept(std::is_nothrow_constructible_v<key_type, std::allocator_arg_t, Alloc, const key_type&>)
   : key(std::allocator_arg, alloc, std::get<key_type>(init))
   {}
 
   template<typename Alloc, typename... Types>
   key_decorator(
-      [[maybe_unused]] Alloc& alloc,
+      Alloc& alloc [[maybe_unused]],
       const std::tuple<Types...>& init,
-      [[maybe_unused]] alloc_ignored_ discriminant)
+      alloc_ignored_ discriminant [[maybe_unused]])
   noexcept(std::is_nothrow_copy_constructible_v<key_type>)
   : key(std::get<key_type>(init))
   {}
@@ -56,7 +56,7 @@ struct key_decorator {
  public:
   template<typename Alloc, typename... Types>
   key_decorator(
-      [[maybe_unused]] std::allocator_arg_t tag,
+      std::allocator_arg_t tag [[maybe_unused]],
       Alloc& alloc,
       const std::tuple<Types...>& init)
   : key_decorator(
@@ -80,7 +80,7 @@ struct cache_key_decorator {
   using element_decorator_type = key_decorator<T>;
 
   template<typename Builder>
-  constexpr cache_key_decorator([[maybe_unused]] const Builder& b) {}
+  constexpr cache_key_decorator(const Builder& b [[maybe_unused]]) {}
 };
 
 

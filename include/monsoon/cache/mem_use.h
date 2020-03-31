@@ -80,14 +80,14 @@ struct cache_max_mem_decorator {
     {}
 
     template<typename StoreType>
-    auto on_create([[maybe_unused]] const StoreType& s)
+    auto on_create(const StoreType& s [[maybe_unused]])
     noexcept
     -> void {
       maintenance_();
     }
 
     template<typename StoreType>
-    auto on_hit([[maybe_unused]] const StoreType& s)
+    auto on_hit(const StoreType& s [[maybe_unused]])
     noexcept
     -> void {
       maintenance_();

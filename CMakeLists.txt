@@ -6,7 +6,7 @@ set(MONSOON_CACHE_VERSION_MINOR 4 CACHE STRING "minor version" FORCE)
 set(MONSOON_CACHE_VERSION ${MONSOON_CACHE_VERSION_MAJOR}.${MONSOON_CACHE_VERSION_MINOR} CACHE STRING "version" FORCE)
 
 enable_testing()
-find_package(instrumentation "1.0")
+find_package(instrumentation 1.0 REQUIRED)
 
 include (CheckCXXCompilerFlag)
 check_cxx_compiler_flag ("-std=c++17" STD_CXX17)
@@ -65,7 +65,7 @@ install(FILES monsoon_cache-config.cmake ${CMAKE_CURRENT_BINARY_DIR}/monsoon_cac
 
 add_subdirectory(test)
 
-find_package(Doxygen REQUIRED mscgen OPTIONAL_COMPONENTS dot)
+find_package(Doxygen COMPONENTS mscgen OPTIONAL_COMPONENTS dot)
 
 if(DOXYGEN_FOUND)
   doxygen_add_docs(monsoon_cache-doc include)

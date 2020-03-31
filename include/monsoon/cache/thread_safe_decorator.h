@@ -22,7 +22,7 @@ template<bool Enabled>
 class thread_safe_decorator {
  public:
   template<typename Builder>
-  thread_safe_decorator([[maybe_unused]] const Builder& b) {}
+  thread_safe_decorator(const Builder& b [[maybe_unused]]) {}
 
   auto lock() const -> void {
     mtx_.lock();
@@ -40,7 +40,7 @@ template<>
 class thread_safe_decorator<false> {
  public:
   template<typename Builder>
-  constexpr thread_safe_decorator([[maybe_unused]] const Builder& b) {}
+  constexpr thread_safe_decorator(const Builder& b [[maybe_unused]]) {}
 
   auto lock() const noexcept -> void {}
   auto unlock() const noexcept -> void {}

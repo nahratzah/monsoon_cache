@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/nahratzah/monsoon_cache.svg?branch=master)](https://travis-ci.org/nahratzah/monsoon_cache)
+
 # monsoon cache
 
 Monsoon-cache is a functional, in-memory cache, in C++.

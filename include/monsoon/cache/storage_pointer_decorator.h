@@ -23,7 +23,7 @@ class storage_pointer_variant_emplace_ {
 
  private:
   template<typename Variant, typename... Args, std::size_t... Idxs>
-  static void do_(Variant& v, std::tuple<Args...>&& args, [[maybe_unused]] std::index_sequence<Idxs...> seq) noexcept {
+  static void do_(Variant& v, std::tuple<Args...>&& args, std::index_sequence<Idxs...> seq [[maybe_unused]]) noexcept {
     v.template emplace<StoragePointer>(std::get<Idxs>(std::move(args))...);
   }
 };
@@ -87,9 +87,9 @@ struct storage_pointer_element_decorator {
 
   template<typename Alloc, typename... Types>
   constexpr storage_pointer_element_decorator(
-      [[maybe_unused]] std::allocator_arg_t tag,
-      [[maybe_unused]] Alloc a,
-      [[maybe_unused]] const std::tuple<Types...>& init) noexcept
+      std::allocator_arg_t tag [[maybe_unused]],
+      Alloc a [[maybe_unused]],
+      const std::tuple<Types...>& init [[maybe_unused]]) noexcept
   {}
 };
 

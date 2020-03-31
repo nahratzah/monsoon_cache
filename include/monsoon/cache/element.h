@@ -79,9 +79,9 @@ struct select_storage_pointer_decorator_<
 struct async_element_decorator {
   template<typename Alloc, typename... Types>
   constexpr async_element_decorator(
-      [[maybe_unused]] std::allocator_arg_t aa,
-      [[maybe_unused]] const Alloc& a,
-      [[maybe_unused]] const std::tuple<Types...>& init)
+      std::allocator_arg_t aa [[maybe_unused]],
+      const Alloc& a [[maybe_unused]],
+      const std::tuple<Types...>& init [[maybe_unused]])
   noexcept
   {}
 };
@@ -298,7 +298,7 @@ class element
    *    std::get<type> on the \p decorator_ctx.
    */
   template<typename Alloc, typename... DecoratorCtx, bool Enable = element::is_async>
-  explicit element([[maybe_unused]] std::allocator_arg_t, Alloc alloc,
+  explicit element(std::allocator_arg_t aa [[maybe_unused]], Alloc alloc,
       std::enable_if_t<Enable, future_type> init, std::size_t hash,
       std::tuple<DecoratorCtx...> decorator_ctx) noexcept;
 
