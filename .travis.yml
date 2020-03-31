@@ -58,7 +58,7 @@ install:
   - cd build
   - env -u CXX cmake ../instrumentation-1.1
   - make
-  - make install
+  - sudo make install
   - popd
 
 before_script:
