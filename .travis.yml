@@ -49,6 +49,18 @@ jobs:
     #    - env -u CXX cmake ../unittest-cpp-2.0.0 && make && sudo make install
     #    - popd
 
+install:
+  # Install the instrrumentation library.
+  - mkdir -p /tmp/instrumentation/build
+  - pushd /tmp/instrumentation
+  - wget -O /tmp/instrumentation.tar.gz https://github.com/nahratzah/instrumentation/archive/v1.1.tar.gz
+  - tar zxf /tmp/instrumentation.tar.gz
+  - mkdir build && cd build
+  - cmake ../instrumentation-v1.1
+  - make
+  - make install
+  - popd
+
 before_script:
   # create a build folder for the out-of-source build
   - mkdir build
