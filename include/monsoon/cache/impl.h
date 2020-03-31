@@ -31,7 +31,7 @@ struct cache_async_decorator {
   using element_decorator_type = async_element_decorator;
 
   template<typename Builder>
-  constexpr cache_async_decorator([[maybe_unused]] const Builder& b) {}
+  constexpr cache_async_decorator(const Builder& b [[maybe_unused]]) {}
 };
 
 
@@ -396,9 +396,9 @@ struct apply_weaken_decorator_t {
 template<typename Impl, typename = void>
 class stats_impl {
  public:
-  stats_impl([[maybe_unused]] const builder_vars_::stats_var<false>& vars) noexcept {}
+  stats_impl(const builder_vars_::stats_var<false>& vars [[maybe_unused]]) noexcept {}
 
-  auto set_stats([[maybe_unused]] Impl& impl)
+  auto set_stats(Impl& impl [[maybe_unused]])
   noexcept
   -> void {
     /* SKIP */

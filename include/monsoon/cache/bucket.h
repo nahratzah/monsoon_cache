@@ -313,9 +313,9 @@ class bucket<Decorators...>::bucket_link {
  public:
   template<typename Alloc, typename Ctx>
   constexpr bucket_link(
-      [[maybe_unused]] std::allocator_arg_t,
-      [[maybe_unused]] const Alloc& alloc,
-      [[maybe_unused]] const Ctx& ctx)
+      std::allocator_arg_t aa [[maybe_unused]],
+      const Alloc& alloc [[maybe_unused]],
+      const Ctx& ctx [[maybe_unused]])
   {}
 
  private:

@@ -38,8 +38,8 @@ struct max_age_decorator {
    public:
     template<typename Alloc, typename... Types>
     element_decorator_type(
-        [[maybe_unused]] std::allocator_arg_t aa,
-        [[maybe_unused]] Alloc a,
+        std::allocator_arg_t aa [[maybe_unused]],
+        Alloc a [[maybe_unused]],
         const std::tuple<Types...>& init)
     : max_age_expire_(std::get<init_arg>(init).expire)
     {}

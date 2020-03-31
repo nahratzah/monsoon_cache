@@ -18,7 +18,7 @@ namespace monsoon::cache {
  */
 struct weaken_decorator {
   template<typename Builder>
-  constexpr weaken_decorator([[maybe_unused]] const Builder& b) noexcept
+  constexpr weaken_decorator(const Builder& b [[maybe_unused]]) noexcept
   {}
 
   template<typename... D>

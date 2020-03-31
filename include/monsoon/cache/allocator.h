@@ -152,7 +152,7 @@ class cache_alloc_tail {
   ///\tparam Idx Indices for the tuple.
   ///\param indices Type tagging, to get \p Idx assigned.
   template<std::size_t... Idx>
-  auto inner_allocator_([[maybe_unused]] std::index_sequence<Idx...> indices) const
+  auto inner_allocator_(std::index_sequence<Idx...> indices [[maybe_unused]]) const
   noexcept
   -> cache_allocator<Tail...> {
     // Construct cache allocator.

@@ -136,7 +136,7 @@ struct key_var_impl
   constexpr key_var_impl() noexcept = default;
 
   template<typename OtherBuilder>
-  constexpr key_var_impl([[maybe_unused]] const OtherBuilder& b, key_var<Type>&& var) noexcept
+  constexpr key_var_impl(const OtherBuilder& b [[maybe_unused]], key_var<Type>&& var) noexcept
   : key_var<Type>(std::move(var))
   {}
 
@@ -169,7 +169,7 @@ struct mapped_ptr_var_impl
   constexpr mapped_ptr_var_impl() noexcept = default;
 
   template<typename OtherBuilder>
-  constexpr mapped_ptr_var_impl([[maybe_unused]] const OtherBuilder& b, mapped_ptr_var<Type>&& var) noexcept
+  constexpr mapped_ptr_var_impl(const OtherBuilder& b [[maybe_unused]], mapped_ptr_var<Type>&& var) noexcept
   : mapped_ptr_var<Type>(std::move(var))
   {}
 
@@ -273,7 +273,7 @@ struct max_memory_var_impl
   constexpr max_memory_var_impl() noexcept = default;
 
   template<typename OtherBuilder>
-  constexpr max_memory_var_impl([[maybe_unused]] const OtherBuilder& b, max_memory_var<Enabled>&& var) noexcept
+  constexpr max_memory_var_impl(const OtherBuilder& b [[maybe_unused]], max_memory_var<Enabled>&& var) noexcept
   : max_memory_var<Enabled>(std::move(var))
   {}
 
@@ -356,7 +356,7 @@ struct max_size_var_impl
   constexpr max_size_var_impl() noexcept = default;
 
   template<typename OtherBuilder>
-  constexpr max_size_var_impl([[maybe_unused]] const OtherBuilder& b, max_size_var<Enabled>&& var) noexcept
+  constexpr max_size_var_impl(const OtherBuilder& b [[maybe_unused]], max_size_var<Enabled>&& var) noexcept
   : max_size_var<Enabled>(std::move(var))
   {}
 
@@ -455,7 +455,7 @@ struct max_age_var_impl
   constexpr max_age_var_impl() noexcept = default;
 
   template<typename OtherBuilder>
-  constexpr max_age_var_impl([[maybe_unused]] const OtherBuilder& b, max_age_var<Enabled>&& var) noexcept
+  constexpr max_age_var_impl(const OtherBuilder& b [[maybe_unused]], max_age_var<Enabled>&& var) noexcept
   : max_age_var<Enabled>(std::move(var))
   {}
 
@@ -553,7 +553,7 @@ struct access_expire_var_impl
   constexpr access_expire_var_impl() noexcept = default;
 
   template<typename OtherBuilder>
-  constexpr access_expire_var_impl([[maybe_unused]] const OtherBuilder& b, access_expire_var<Enabled>&& var) noexcept
+  constexpr access_expire_var_impl(const OtherBuilder& b [[maybe_unused]], access_expire_var<Enabled>&& var) noexcept
   : access_expire_var<Enabled>(std::move(var))
   {}
 
@@ -617,7 +617,7 @@ struct thread_safe_var_impl
   constexpr thread_safe_var_impl() noexcept = default;
 
   template<typename OtherBuilder>
-  constexpr thread_safe_var_impl([[maybe_unused]] const OtherBuilder& b, thread_safe_var<Enabled>&& var) noexcept
+  constexpr thread_safe_var_impl(const OtherBuilder& b [[maybe_unused]], thread_safe_var<Enabled>&& var) noexcept
   : thread_safe_var<Enabled>(std::move(var))
   {}
 
@@ -683,7 +683,7 @@ struct concurrency_var_impl
   constexpr concurrency_var_impl() noexcept = default;
 
   template<typename OtherBuilder>
-  constexpr concurrency_var_impl([[maybe_unused]] const OtherBuilder& b, concurrency_var&& var) noexcept
+  constexpr concurrency_var_impl(const OtherBuilder& b [[maybe_unused]], concurrency_var&& var) noexcept
   : concurrency_var(std::move(var))
   {}
 
@@ -751,7 +751,7 @@ struct load_factor_var_impl
   constexpr load_factor_var_impl() noexcept = default;
 
   template<typename OtherBuilder>
-  constexpr load_factor_var_impl([[maybe_unused]] const OtherBuilder& b, load_factor_var&& var) noexcept
+  constexpr load_factor_var_impl(const OtherBuilder& b [[maybe_unused]], load_factor_var&& var) noexcept
   : load_factor_var(std::move(var))
   {}
 
@@ -830,7 +830,7 @@ struct async_var_impl
   constexpr async_var_impl() noexcept = default;
 
   template<typename OtherBuilder>
-  constexpr async_var_impl([[maybe_unused]] const OtherBuilder& b, async_var<Enabled>&& var) noexcept
+  constexpr async_var_impl(const OtherBuilder& b [[maybe_unused]], async_var<Enabled>&& var) noexcept
   : async_var<Enabled>(std::move(var))
   {}
 
@@ -935,7 +935,7 @@ struct stats_var_impl
   constexpr stats_var_impl() noexcept = default;
 
   template<typename OtherBuilder>
-  constexpr stats_var_impl([[maybe_unused]] const OtherBuilder& b, stats_var<Enabled>&& var) noexcept
+  constexpr stats_var_impl(const OtherBuilder& b [[maybe_unused]], stats_var<Enabled>&& var) noexcept
   : stats_var<Enabled>(std::move(var))
   {}
 
@@ -1031,7 +1031,7 @@ struct storage_override_var_impl
   constexpr storage_override_var_impl() noexcept = default;
 
   template<typename OtherBuilder>
-  constexpr storage_override_var_impl([[maybe_unused]] const OtherBuilder& b, storage_override_var<StoragePtr, StoragePtrCArgs, StoragePtrDeref>&& var) noexcept
+  constexpr storage_override_var_impl(const OtherBuilder& b [[maybe_unused]], storage_override_var<StoragePtr, StoragePtrCArgs, StoragePtrDeref>&& var) noexcept
   : storage_override_var<StoragePtr, StoragePtrCArgs, StoragePtrDeref>(std::move(var))
   {}
 
@@ -1067,7 +1067,7 @@ struct hash_var_impl
   constexpr hash_var_impl() noexcept = default;
 
   template<typename OtherBuilder>
-  constexpr hash_var_impl([[maybe_unused]] const OtherBuilder& b, hash_var<Hash>&& var) noexcept
+  constexpr hash_var_impl(const OtherBuilder& b [[maybe_unused]], hash_var<Hash>&& var) noexcept
   : hash_var<Hash>(std::move(var))
   {}
 
@@ -1129,7 +1129,7 @@ struct equality_var_impl
   constexpr equality_var_impl() noexcept = default;
 
   template<typename OtherBuilder>
-  constexpr equality_var_impl([[maybe_unused]] const OtherBuilder& b, equality_var<Eq>&& var) noexcept
+  constexpr equality_var_impl(const OtherBuilder& b [[maybe_unused]], equality_var<Eq>&& var) noexcept
   : equality_var<Eq>(std::move(var))
   {}
 
@@ -1191,7 +1191,7 @@ struct allocator_var_impl
   constexpr allocator_var_impl() noexcept(std::is_nothrow_default_constructible_v<Alloc>) = default;
 
   template<typename OtherBuilder>
-  constexpr allocator_var_impl([[maybe_unused]] const OtherBuilder& b, allocator_var<Alloc>&& var) noexcept
+  constexpr allocator_var_impl(const OtherBuilder& b [[maybe_unused]], allocator_var<Alloc>&& var) noexcept
   : allocator_var<Alloc>(std::move(var))
   {}
 

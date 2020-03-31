@@ -26,14 +26,14 @@ struct max_size_decorator {
     {}
 
     template<typename StoreType>
-    auto on_create([[maybe_unused]] const StoreType& s)
+    auto on_create(const StoreType& s [[maybe_unused]])
     noexcept
     -> void {
       apply_(static_cast<CacheImpl&>(*this), max_size_);
     }
 
     template<typename StoreType>
-    auto on_hit([[maybe_unused]] const StoreType& s)
+    auto on_hit(const StoreType& s [[maybe_unused]])
     noexcept
     -> void {
       apply_(static_cast<CacheImpl&>(*this), max_size_);
