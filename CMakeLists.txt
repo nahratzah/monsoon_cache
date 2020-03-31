@@ -65,7 +65,7 @@ install(FILES monsoon_cache-config.cmake ${CMAKE_CURRENT_BINARY_DIR}/monsoon_cac
 
 add_subdirectory(test)
 
-find_package(Doxygen REQUIRED mscgen OPTIONAL_COMPONENTS dot)
+find_package(Doxygen COMPONENTS mscgen OPTIONAL_COMPONENTS dot)
 
 if(DOXYGEN_FOUND)
   doxygen_add_docs(monsoon_cache-doc include)
