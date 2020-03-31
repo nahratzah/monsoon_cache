@@ -55,8 +55,8 @@ install:
   - pushd /tmp/instrumentation
   - wget -O /tmp/instrumentation.tar.gz https://github.com/nahratzah/instrumentation/archive/v1.1.tar.gz
   - tar zxf /tmp/instrumentation.tar.gz
-  - mkdir build && cd build
-  - cmake ../instrumentation-v1.1
+  - cd build
+  - env -u CXX cmake ../instrumentation-v1.1
   - make
   - make install
   - popd
